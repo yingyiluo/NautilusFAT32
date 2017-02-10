@@ -34,6 +34,98 @@
 #include "fat32fs.h"
 #include "fat32_types.h"
 
+static ssize_t fat2_read_write(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes, int write)
+{
+	return -1;
+}
+
+static ssize_t fat32_read(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes)
+{
+    return fat32_read_write(state,file,srcdest,offset,num_bytes,0);
+}
+
+static ssize_t fat32_write(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes)
+{
+    return fat32_read_write(state,file,srcdest,offset,num_bytes,1);
+}
+
+static int fat32_stat_path(void *state, char *path, struct nk_fs_stat *st)
+{
+    struct fat32_state *fs = (struct fat32_state *)state;
+    //uint32_t inum = get_inode_num_by_path(fs,path);
+/*
+    if (!inum) {
+        ERROR("Nonexistent path %s during stat\n",path);
+        return -1;
+    }
+*/
+   // return ext2_stat(state,(void*)(uint64_t)inum,st);
+   return -1;
+}
+
+static void *ext2_create(void *state, char *path, int dir)
+{
+	return;
+}
+
+static void *fat32_create_file(void *state, char *path)
+{
+    return fat32_create(state,path,0);
+}
+
+static int fat32_create_dir(void *state, char *path)
+{
+    void *f = fat32_create(state,path,1);
+
+    if (!f) {
+        return -1;
+    } else {
+        return 0;
+    }
+}
+
+static int fat32_exists(void *state, char *path)
+{
+    struct fat32_state *fs = (struct fat32_state *)state;
+
+    DEBUG("exists(%s,%s)?\n",fs->fs->name,path);
+   // uint32_t inode_num = get_inode_num_by_path(fs, path);
+   // return inode_num != 0;
+    return -1;
+}
+
+int fat32_remove(void *state, char *path)
+{
+    return -1;
+}
+
+static void * fat32_open(void *state, char *path)
+{
+    return;
+}
+
+static int fat32_stat(void *state, void *file, struct nk_fs_stat *st)
+{
+    struct fat32_state *fs = (struct fat32_state *)state;
+    return 0;
+}
+
+static int fat32_truncate(void *state, void *file, off_t len)
+{
+    return -1;
+}
+static void fat32_close(void *state, void *file)
+{
+    struct fat32_state *fs = (struct fat32_state *)state;
+
+    DEBUG("closing inode %u\n",(uint32_t)(uint64_t)file);
+
+    // ideally FS would track this here so that we can handle multiple
+    // opens, locking, etc correctly, but that's outside of scope for now
+
+}
+
+
 static struct nk_fs_int fat32_inter = {
     .stat_path = fat32_stat_path,
     .create_file = fat32_create_file,
