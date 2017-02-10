@@ -73,6 +73,10 @@
 #include <fs/ext2/ext2.h>
 #endif
 
+#ifdef NAUT_CONFIG_FAT32_FILESYSTEM_DRIVER
+#include <fs/fat32/fat32.h>
+#endif
+
 #ifdef NAUT_CONFIG_NDPC_RT
 #include "ndpc_preempt_threads.h"
 #endif
