@@ -34,6 +34,19 @@
 #include "fat32fs.h"
 #include "fat32_types.h"
 
+static struct nk_fs_int fat32_inter = {
+    .stat_path = fat32_stat_path,
+    .create_file = fat32_create_file,
+    .create_dir = fat32_create_dir,
+    .exists = fat32_exists,
+    .remove = fat32_remove,
+    .open_file = fat32_open,
+    .stat = fat32_stat,
+    .trunc_file = fat32_truncate,
+    .close_file = fat32_close,
+    .read_file = fat32_read,
+    .write_file = fat32_write,
+};
 
 int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 	struct nk_block_dev *dev = nk_block_dev_find(devname);
@@ -93,8 +106,8 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 	free(s);
 	return -1;
     }
-    
-    s->fs = nk_fs_register(fsname, flags, &ext2_inter, s);
+    */
+    s->fs = nk_fs_register(fsname, flags, &fat32_inter, s);
 
     if (!s->fs) { 
 	ERROR("Unable to register filesystem %s\n", fsname);
@@ -103,6 +116,16 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     }
 
     INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
-    */
+    
 	return 0;
+}
+
+int nk_fs_ext2_detach(char *fsname)
+{
+    struct nk_fs *fs = nk_fs_find(fsname);
+    if (!fs) {
+        return -1;
+    } else {
+        return nk_fs_unregister(fs);
+    }
 }
