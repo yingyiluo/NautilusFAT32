@@ -34,7 +34,7 @@
 #include "fat32fs.h"
 #include "fat32_types.h"
 
-static ssize_t fat2_read_write(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes, int write)
+static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes, int write)
 {
 	return -1;
 }
@@ -63,7 +63,7 @@ static int fat32_stat_path(void *state, char *path, struct nk_fs_stat *st)
    return -1;
 }
 
-static void *ext2_create(void *state, char *path, int dir)
+static void *fat32_create(void *state, char *path, int dir)
 {
 	return;
 }
