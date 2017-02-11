@@ -8,8 +8,10 @@
  *
  * Built for adding fat32 functionality to the Nautilus OS, Northwestern University
  */
+
 #include "fat32fs.h"
 #include "fat32_types.h"
+#include "fat32fs.h"
 
 #define FLOOR_DIV(x,y) ((x)/(y))
 #define CEIL_DIV(x,y)  (((x)/(y)) + !!((x)%(y)))
@@ -33,14 +35,8 @@ int read_write_bootrecord(struct fat32_state *fs, int write){
 		ERROR("Cannot %s bootrecord as it is too small or not a multiple of device blocks\n",rw[write]);
 		return -1;
     }
-    /*
-    (struct nk_block_dev *dev, 
-		      uint64_t blocknum, 
-		      uint64_t count, 
-		      void   *dest, 
-		      nk_dev_request_type_t type);
-		      */
-	int rc;
+
+	int rc = 0;
 	if (write) { 
 		//rc = nk_block_dev_write(fs->dev,dev_offset,dev_num,&fs->super,NK_DEV_REQ_BLOCKING); 
 		// TODO: write shadow copies
@@ -57,3 +53,21 @@ int read_write_bootrecord(struct fat32_state *fs, int write){
 }
 #define read_bootrecord(fs)  read_write_bootrecord(fs,0)
 #define write_bootrecord(fs) read_write_bootrecord(fs,1)
+
+
+int read_FAT(struct fat32_state *fs){
+	int rc = 0;
+	uint32_t cluster_size = fs->bootrecord.cluster_size;
+	uint32_t FAT32_size = fs->bootrecord.FAT32_size;
+
+	fs->table_chars.cluster_size = cluster_size;
+	fs->table_chars.FAT32_size = FAT32_size;
+	fs->table_chars.FAT32_begin = malloc(FAT32_size * fs->chars.block_size);
+
+	rc = nk_block_dev_read(fs->dev, fs->bootrecord.reservedblock_size, FAT32_size, fs->table_chars.FAT32_begin, NK_DEV_REQ_BLOCKING);
+	if(rc) {
+		ERROR("Failed to read FAT from disk");
+		return -1;
+	}
+	return 0;
+}

@@ -30,9 +30,10 @@
 
 #include <fs/fat32/fat32.h>
 
+#include "fat32_types.h"
 #include "fat32_access.c"
 #include "fat32fs.h"
-#include "fat32_types.h"
+
 
 typedef union attributes
 {
@@ -96,7 +97,7 @@ static void *fat32_create(void *state, char *path, int dir)
 
 static void *fat32_create_file(void *state, char *path)
 {
-    return fat32_create(state,path,0);
+    return ;
 }
 
 static int fat32_create_dir(void *state, char *path)
@@ -200,6 +201,13 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 		return -1;
     }
 
+    if (read_FAT(s)){
+        ERROR("Cannot load FAT into memory");
+        free(s);
+        return -1;
+    }
+
+    /*
     //DEBUG("System ID \"%s\"\n", s->bootrecord.system_id);
 	DEBUG("Media byte %x\n", s->bootrecord.media_type);
 	DEBUG("%lu bytes per logical sector\n",s->bootrecord.sector_size);
@@ -215,16 +223,8 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 	DEBUG("%lu hidden sectors\n",s->bootrecord.hidden_sector_num);
 	DEBUG("%lu sectors total\n",s->bootrecord.total_sector_num);
 
-
-    /*
-    // stash away superblock for later use
-    // any modifier is responsible for writing it as well
-    if (read_superblock(s)) {
-	ERROR("Cannot read superblock for fs %s on device %s\n", fsname, devname);
-	free(s);
-	return -1;
-    }
     */
+    
     s->fs = nk_fs_register(fsname, flags, &fat32_inter, s);
 
     if (!s->fs) { 
