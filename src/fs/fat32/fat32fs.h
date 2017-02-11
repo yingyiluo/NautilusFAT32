@@ -47,4 +47,30 @@ struct fat32_char {
 	uint32_t FAT32_size;
 	uint32_t *FAT32_begin;
 };
+
+typedef union attributes
+{
+   struct
+   {
+       char readonly : 1;
+       char hidden : 1;
+       char system : 1;
+       char volumeid : 1;
+       char dir : 1;
+       char archive : 1; 
+   };
+   char attris;
+}attributes;
+
+typedef struct dir_entry
+{
+    char[8] name;
+    char[3] ext;
+    attributes attri;  //attributs 
+    char[8] reserved0;
+    char[2] high_cluster;
+    char[4] reserved1;
+    char[2] low_cluster;
+    uint size;
+}dir_entry; 
 #endif
