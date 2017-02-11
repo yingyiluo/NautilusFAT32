@@ -1,5 +1,5 @@
 *.o
-
+*.config*
 tags
 *.img
 *.bin

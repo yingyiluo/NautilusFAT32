@@ -2,6 +2,7 @@
 #define __FAT32_TYPES_H__
 
 
+#include "fat32fs.h"
 
 #define INFO(fmt, args...)  INFO_PRINT("fat32: " fmt, ##args)
 #define DEBUG(fmt, args...) DEBUG_PRINT("fat32: " fmt, ##args)
@@ -20,6 +21,7 @@ struct fat32_state {
     struct nk_block_dev *dev;
     struct nk_fs        *fs;
     struct fat32_bootrecord bootrecord;
+	struct fat32_char	table_chars;
 };
 
 

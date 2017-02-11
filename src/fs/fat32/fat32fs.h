@@ -42,5 +42,9 @@ struct fat32_bootrecord{
 }__attribute__((packed));
 
 
-
+struct fat32_char {
+	uint32_t cluster_size;
+	uint32_t FAT32_size;
+	uint32_t *FAT32_begin;
+};
 #endif
