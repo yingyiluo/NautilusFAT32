@@ -37,7 +37,7 @@
 
 static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes, int write)
 {
-	struct fat32_state *fs = (struct fat32_state) state;
+	struct fat32_state *fs = (struct fat32_state *) state;
 	uint64_t sector_size = get_sector_size(fs);
 
 	return -1;
