@@ -71,3 +71,9 @@ int read_FAT(struct fat32_state *fs){
 	}
 	return 0;
 }
+
+static uint32_t get_sector_size(struct fat32_state *fs)
+{
+	return fs->bootrecord.sector_size;
+
+}

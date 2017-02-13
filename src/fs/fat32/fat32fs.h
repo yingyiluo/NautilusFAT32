@@ -64,13 +64,13 @@ typedef union attributes
 
 typedef struct dir_entry
 {
-    char[8] name;
-    char[3] ext;
+    char name[8];
+    char ext[3];
     attributes attri;  //attributs 
-    char[8] reserved0;
-    char[2] high_cluster;
-    char[4] reserved1;
-    char[2] low_cluster;
-    uint size;
+    char reserved0[8];
+    char high_cluster[2];
+    char reserved1[4];
+    char low_cluster[2];
+    uint32_t size;
 }dir_entry; 
 #endif
