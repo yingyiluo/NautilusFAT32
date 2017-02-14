@@ -46,6 +46,8 @@ struct fat32_char {
 	uint32_t cluster_size;
 	uint32_t FAT32_size;
 	uint32_t *FAT32_begin;
+	uint32_t data_start;  //data region starting sector number
+	uint32_t data_end; //end of data sectors
 };
 
 typedef union attributes
@@ -62,7 +64,7 @@ typedef union attributes
    char attris;
 }attributes;
 
-typedef struct dir_entry
+typedef struct __attribute__((packed)) dir_entry 
 {
     char name[8];
     char ext[3];
