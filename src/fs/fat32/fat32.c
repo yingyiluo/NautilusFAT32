@@ -183,7 +183,7 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
         free(s);
         return -1;
     }
-
+    
     /*
     //DEBUG("System ID \"%s\"\n", s->bootrecord.system_id);
 	DEBUG("Media byte %x\n", s->bootrecord.media_type);

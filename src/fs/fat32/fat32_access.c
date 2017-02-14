@@ -67,6 +67,7 @@ int read_FAT(struct fat32_state *fs){
 	rc = nk_block_dev_read(fs->dev, fs->bootrecord.reservedblock_size, FAT32_size, fs->table_chars.FAT32_begin, NK_DEV_REQ_BLOCKING);
 	if(rc) {
 		ERROR("Failed to read FAT from disk");
+		free(fs->table_chars.FAT32_begin);
 		return -1;
 	}
 	return 0;
