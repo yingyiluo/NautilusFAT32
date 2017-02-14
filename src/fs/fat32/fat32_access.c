@@ -126,9 +126,17 @@ void debug_print_file(struct fat32_state* state, uint32_t cluster_num, uint32_t 
 static uint32_t path_lookup( struct fat32_state* state, char* path )
 {
 	uint32_t root_sector = get_sector_num(state->bootrecord.rootdir_cluster, state);
+	DEBUG("table entry[2] = %x\n", state->table_chars.FAT32_begin[2]);
+	DEBUG("root sector num is %d\n", root_sector);
+	DEBUG("directory entry size %d\n", sizeof(dir_entry));
 	dir_entry* root_data = (dir_entry*)malloc(state->bootrecord.sector_size);
 	nk_block_dev_read(state->dev, root_sector, 1, root_data, NK_DEV_REQ_BLOCKING);
-	char found = '0';
+
+	//print out the entire block
+	for(int i = 0; i < 512; i+=4){
+		DEBUG("%d th 32 bit is %x\n", i, *((int*)root_data+i));
+	}
+	//char found = '0';
 /*	while(){
 		//if not found and more cluster
 		call helper
@@ -137,18 +145,24 @@ static uint32_t path_lookup( struct fat32_state* state, char* path )
 	char file_ext[4];
 
 	filename_parser(path, file_name, file_ext);
+	DEBUG("read file name is %s, ext is %s\n", file_name, file_ext);
 	int i;
 	for(i = 0; i < state->bootrecord.sector_size/sizeof(dir_entry); i++){
 		dir_entry data = root_data[i];
+		DEBUG("i is %d, dir_entry name is %s, ext is %s\n", i, data.name, data.ext);
 		if( strncmp(data.name, file_name, 8) == 0 && strncmp(data.ext, file_ext, 3) == 0){
+			DEBUG("enter strncmp if statement\n");
 			break;
 		}
 	}
+	DEBUG("directory entry name: %s \n",root_data[i].name);
+
 	char cluster_str[5];  
 	strncpy(cluster_str, root_data[i].high_cluster, 2);
-	strncpy(cluster_str[2], root_data[i].low_cluster, 2);
+	strncpy(cluster_str+2, root_data[i].low_cluster, 2);
 	cluster_str[4] = '\0';
 	int cluster_num = atoi(cluster_str);
+	DEBUG("cluster number of file %d\n", cluster_num);
 	debug_print_file(state, cluster_num, root_data[i].size);
 	return cluster_num;
 }
