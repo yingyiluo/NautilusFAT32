@@ -184,8 +184,8 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
         return -1;
     }
     
-    path_lookup(s, "/foo.txt");
-    /*
+    
+    
     //DEBUG("System ID \"%s\"\n", s->bootrecord.system_id);
 	DEBUG("Media byte %x\n", s->bootrecord.media_type);
 	DEBUG("%lu bytes per logical sector\n",s->bootrecord.sector_size);
@@ -201,18 +201,18 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 	DEBUG("%lu hidden sectors\n",s->bootrecord.hidden_sector_num);
 	DEBUG("%lu sectors total\n",s->bootrecord.total_sector_num);
 
-    */
     
-    s->fs = nk_fs_register(fsname, flags, &fat32_inter, s);
-
-    if (!s->fs) { 
-	ERROR("Unable to register filesystem %s\n", fsname);
-	free(s);
-	return -1;
-    }
-
-    INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
     
+   	s->fs = nk_fs_register(fsname, flags, &fat32_inter, s);
+
+    	if (!s->fs) { 
+		ERROR("Unable to register filesystem %s\n", fsname);
+		free(s);
+		return -1;
+    	}
+
+    	INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
+    	path_lookup(s, "/FOO2.TXT"); 
 	return 0;
 }
 
