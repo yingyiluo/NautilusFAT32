@@ -70,9 +70,9 @@ typedef struct __attribute__((packed)) dir_entry
     char ext[3];
     attributes attri;  //attributs 
     char reserved0[8];
-    char high_cluster[2];
+    uint16_t high_cluster;
     char reserved1[4];
-    char low_cluster[2];
+    uint16_t low_cluster;
     uint32_t size;
 }dir_entry; 
 #endif
