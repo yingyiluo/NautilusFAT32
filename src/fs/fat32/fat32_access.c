@@ -105,6 +105,9 @@ static void filename_parser(char* path, char* name, char* ext, int* name_s, int*
 	}
 		
 	*name_s = i-1;
+	if (*name_s < 8) {
+		name[(*name_s)++] = ' '; // append a space if name < 8 chars
+	}
 	i++;
 	while(path[i] != '\0')
 	{
@@ -113,6 +116,9 @@ static void filename_parser(char* path, char* name, char* ext, int* name_s, int*
 		ext_i++;
 	}
 	*ext_s = ext_i; 
+	if (*ext_s < 3) {
+		ext[(*ext_s)++] = ' ';
+	}
 }
 
 void debug_print_file(struct fat32_state* state, uint32_t cluster_num, uint32_t size){
