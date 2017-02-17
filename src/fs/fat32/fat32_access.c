@@ -117,7 +117,7 @@ static void filename_parser(char* path, char* name, char* ext, int* name_s, int*
 	}
 	*ext_s = ext_i; 
 	if (*ext_s < 3) {
-		ext[(*ext_s)++] = ' ';
+		ext[(*ext_s)++] = ' '; // append a space if ext < 3 chars
 	}
 }
 
@@ -128,6 +128,19 @@ void debug_print_file(struct fat32_state* state, uint32_t cluster_num, uint32_t 
 	strncpy(output, file, size);
 	output[size] = 0;
 	DEBUG("file contents: %s\n", output);
+}
+
+static int isLowerCase(char c) {
+	return (c >= 'a' && c <= 'z');
+}
+
+static char* toUpperCase(char* s) {
+	for (int i = 0; s[i] != '\0'; ++i) {
+		if (isLowerCase(s[i])) {
+			s[i] += ('A' - 'a');
+		}
+	}
+	return s;
 }
 
 static uint32_t path_lookup( struct fat32_state* state, char* path )
@@ -148,7 +161,7 @@ static uint32_t path_lookup( struct fat32_state* state, char* path )
 	char file_ext[3];
 	uint32_t cluster_num;
 	int i, name_size, ext_size;
-	filename_parser(path, file_name, file_ext, &name_size, &ext_size);
+	filename_parser(toUpperCase(path), file_name, file_ext, &name_size, &ext_size);
 	DEBUG("read file name is %s, ext is %s\n", file_name, file_ext);
 	for(i = 0; i < state->bootrecord.sector_size/sizeof(dir_entry); i++){
 		dir_entry data = root_data[i];
@@ -163,4 +176,3 @@ static uint32_t path_lookup( struct fat32_state* state, char* path )
 
 	return cluster_num;
 }
-

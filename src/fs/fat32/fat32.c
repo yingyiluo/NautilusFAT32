@@ -212,7 +212,8 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     	}
 
     	INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
-    	path_lookup(s, "/FOO2.TXT"); 
+    	path_lookup(s, "/foo.txt"); 
+    	path_lookup(s, "/foo2.txt"); 
 	return 0;
 }
 
