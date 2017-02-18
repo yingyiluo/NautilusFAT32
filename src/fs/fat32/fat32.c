@@ -45,10 +45,11 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     uint32_t cluster_size = get_cluster_size(fs);
     while(remainder > cluster_size)
     {
-        uint32_t next = fs->FAT32_begin[cluster_num];
+        uint32_t next = fs->table_chars.FAT32_begin[cluster_num];
         //check if next is valid
         if( next >= EOC_MIN && next <= EOC_MAX ) return -1;
-        if( next < fs->data_start || next > fs->data_end ) return -1;
+        if( next < fs->table_chars.data_start || next > fs->table_chars.data_end ) return -1;
+        cluster_num = next; 
         remainder -= cluster_size;
     }
     

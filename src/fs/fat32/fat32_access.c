@@ -64,7 +64,7 @@ int read_FAT(struct fat32_state *fs){
 	fs->table_chars.cluster_size = cluster_size;
 	fs->table_chars.FAT32_size = FAT32_size;
 	fs->table_chars.FAT32_begin = malloc(FAT32_size * fs->chars.block_size);
-	fs->table_chars.data_start = fs->bootrecord.FAT_num * FAT32_size + fs->bootrecord.reservedblock_size;
+	fs->table_chars.data_start = fs->bootrecord.FAT_num * FAT32_size;
 	fs->table_chars.data_end = fs->bootrecord.total_sector_num;
 
 	rc = nk_block_dev_read(fs->dev, fs->bootrecord.reservedblock_size, FAT32_size, fs->table_chars.FAT32_begin, NK_DEV_REQ_BLOCKING);
