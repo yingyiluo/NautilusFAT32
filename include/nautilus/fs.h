@@ -36,6 +36,8 @@
 
 #define FS_NAME_LEN     32
 #define MOUNT_PATH_LEN  1024
+#define EOC_MIN         0xFFFFFF8
+#define EOC_MAX         0xFFFFFFF
 
 struct nk_fs_stat {
     // to be expanded as we go

@@ -1,1 +1,0 @@
-cmd_src/arch/x64/built-in.o :=  ld -z max-page-size=0x1000 -melf_x86_64 -dp  -r -o src/arch/x64/built-in.o src/arch/x64/asm/built-in.o src/arch/x64/init.o src/arch/x64/main.o src/arch/x64/mwait.o src/arch/x64/numa.o src/arch/x64/smp.o src/arch/x64/early_mem.o src/arch/x64/shutdown.o

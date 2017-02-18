@@ -76,9 +76,9 @@ int read_FAT(struct fat32_state *fs){
 	return 0;
 }
 
-static uint32_t get_sector_size(struct fat32_state *fs)
+static uint32_t get_cluster_size(struct fat32_state *fs)
 {
-	return fs->bootrecord.sector_size;
+	return (uint32_t)fs->bootrecord.sector_size * (uint32_t)fs->bootrecord.cluster_size;
 
 }
 
@@ -169,10 +169,9 @@ static uint32_t path_lookup( struct fat32_state* state, char* path )
 		if( strncmp(data.name, file_name, name_size) == 0 && strncmp(data.ext, file_ext, ext_size) == 0){
 			cluster_num = DECODE_CLUSTER(data.high_cluster,data.low_cluster);
 			DEBUG("cluster num is %d\n", cluster_num);	
-			debug_print_file(state, cluster_num, root_data[i].size);			
-			break;
+			debug_print_file(state, cluster_num, root_data[i].size);
+			return cluster_num;			
 		}
 	}
-
-	return cluster_num;
+	return 0; //cannot find file
 }

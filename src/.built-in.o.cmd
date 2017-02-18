@@ -1,1 +1,0 @@
-cmd_src/built-in.o :=  ld -z max-page-size=0x1000 -melf_x86_64 -dp  -r -o src/built-in.o src/nautilus/built-in.o src/arch/built-in.o src/asm/built-in.o src/dev/built-in.o src/fs/built-in.o src/acpi/built-in.o src/test/built-in.o

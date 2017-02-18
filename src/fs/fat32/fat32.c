@@ -37,9 +37,21 @@
 
 static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes, int write)
 {
-	struct fat32_state *fs = (struct fat32_state *) state;
-	uint64_t sector_size = get_sector_size(fs);
-
+	if(srcdest == NULL) return -1;
+    struct fat32_state *fs = (struct fat32_state *) state;
+	uint32_t cluster_num = path_lookup(fs, (char*) file);
+    if(cluster_num == 0) return -1;
+    off_t remainder = offset;
+    uint32_t cluster_size = get_cluster_size(fs);
+    while(remainder > cluster_size)
+    {
+        uint32_t next = fs->FAT32_begin[cluster_num];
+        //check if next is valid
+        if( next >= EOC_MIN && next <= EOC_MAX ) return -1;
+        if( next < fs->data_start || next > fs->data_end ) return -1;
+        remainder -= cluster_size;
+    }
+    
 	return -1;
 }
 
@@ -91,11 +103,11 @@ static int fat32_create_dir(void *state, char *path)
 static int fat32_exists(void *state, char *path)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
-
-    DEBUG("exists(%s,%s)?\n",fs->fs->name,path);
+    uint32_t num = path_lookup(fs, path);
+    return num != 0; 
+    //DEBUG("exists(%s,%s)?\n",fs->fs->name,path);
    // uint32_t inode_num = get_inode_num_by_path(fs, path);
    // return inode_num != 0;
-    return -1;
 }
 
 int fat32_remove(void *state, char *path)
@@ -105,7 +117,10 @@ int fat32_remove(void *state, char *path)
 
 static void * fat32_open(void *state, char *path)
 {
-    return;
+    struct fat32_state *fs = (struct fat32_state *)state;
+    uint32_t cluster_num = path_lookup(fs, path);
+    DEBUG("open of %s returned cluster number %u\n", path, cluster_num);
+    return (void*)(uint32_t)cluster_num;
 }
 
 static int fat32_stat(void *state, void *file, struct nk_fs_stat *st)
