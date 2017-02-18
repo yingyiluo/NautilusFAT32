@@ -55,7 +55,6 @@ int read_write_bootrecord(struct fat32_state *fs, int write){
 #define read_bootrecord(fs)  read_write_bootrecord(fs,0)
 #define write_bootrecord(fs) read_write_bootrecord(fs,1)
 
-
 int read_FAT(struct fat32_state *fs){
 	int rc = 0;
 	uint32_t cluster_size = fs->bootrecord.cluster_size;
@@ -64,8 +63,8 @@ int read_FAT(struct fat32_state *fs){
 	fs->table_chars.cluster_size = cluster_size;
 	fs->table_chars.FAT32_size = FAT32_size;
 	fs->table_chars.FAT32_begin = malloc(FAT32_size * fs->chars.block_size);
-	fs->table_chars.data_start = fs->bootrecord.FAT_num * FAT32_size;
-	fs->table_chars.data_end = fs->bootrecord.total_sector_num;
+	fs->table_chars.data_start = fs->bootrecord.FAT_num * FAT32_size + fs->bootrecord.reservedblock_size;
+	fs->table_chars.data_end = fs->bootrecord.total_sector_num - 1; 
 
 	rc = nk_block_dev_read(fs->dev, fs->bootrecord.reservedblock_size, FAT32_size, fs->table_chars.FAT32_begin, NK_DEV_REQ_BLOCKING);
 	if(rc) {
@@ -84,7 +83,7 @@ static uint32_t get_cluster_size(struct fat32_state *fs)
 
 static uint32_t get_sector_num(uint32_t cluster_num, struct fat32_state* fs)
 {
-	uint32_t num = fs->table_chars.data_start + cluster_num*fs->table_chars.cluster_size - fs->bootrecord.rootdir_cluster;
+	uint32_t num = fs->table_chars.data_start + (cluster_num - fs->bootrecord.rootdir_cluster) * fs->table_chars.cluster_size;
 /*	if(num < fs->table_chars.data_end)
 		return num;
 	return -1;*/
@@ -143,7 +142,7 @@ static char* toUpperCase(char* s) {
 	return s;
 }
 
-static uint32_t path_lookup( struct fat32_state* state, char* path )
+static dir_entry* path_lookup( struct fat32_state* state, char* path )
 {
 	uint32_t root_sector = get_sector_num(state->bootrecord.rootdir_cluster, state);
 	DEBUG("table entry[2] = %x\n", state->table_chars.FAT32_begin[2]);
@@ -170,8 +169,8 @@ static uint32_t path_lookup( struct fat32_state* state, char* path )
 			cluster_num = DECODE_CLUSTER(data.high_cluster,data.low_cluster);
 			DEBUG("cluster num is %d\n", cluster_num);	
 			debug_print_file(state, cluster_num, root_data[i].size);
-			return cluster_num;			
+			return &data;			
 		}
 	}
-	return 0; //cannot find file
+	return NULL; //cannot find file
 }

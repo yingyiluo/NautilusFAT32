@@ -3,6 +3,8 @@
 
 
 #define BOOTRECORD_SIZE		512
+#define EOC_MIN         0xFFFFFF8
+#define EOC_MAX         0xFFFFFFF
 
 struct fat32_bootrecord{
 	//BIOS Parament Block
