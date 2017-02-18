@@ -43,8 +43,12 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     if (!dir) { // if dir doesn't exist
         return -1;
     }
+    if (offset >= dir->size) { // invalid offset
+        return -1;
+    }
+
     uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
-    num_bytes = MIN(num_bytes, dir->size - offset);
+    long to_be_read = MIN(num_bytes, dir->size - offset);
     off_t remainder = offset;
     uint32_t cluster_size = get_cluster_size(fs); // in bytes
     uint32_t cluster_min = fs->bootrecord.rootdir_cluster; // min valid cluster number
@@ -60,20 +64,22 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     }
 
     void *buf = (void *) malloc(cluster_size);
+    DEBUG("remainder = %d\n", remainder);
+    DEBUG("to_be_read = %d\n", to_be_read);
     if (write) { // write
 
     } else { // read
         do {
             nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
             if (remainder > 0) {
-                memcpy(srcdest, (char *)buf + remainder, MIN(cluster_size - remainder, num_bytes));
+                memcpy(srcdest, (char *)buf + remainder, MIN(cluster_size - remainder, to_be_read));
                 remainder = 0;
-                num_bytes = num_bytes - cluster_size + remainder;
+                to_be_read = to_be_read - cluster_size + remainder;
             } else {
-                memcpy(srcdest, buf, MIN(num_bytes, cluster_size));
-                num_bytes -= cluster_size;
+                memcpy(srcdest, buf, MIN(to_be_read, cluster_size));
+                to_be_read -= cluster_size;
             }
-        } while (num_bytes > 0);
+        } while (to_be_read > 0);
     }
     free(buf);
 
@@ -252,14 +258,19 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     	}
 
     	INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
+        // tests lookup
     	//path_lookup(s, "/foo.txt"); 
     	//path_lookup(s, "/foo2.txt");
+
+        // tests read in fat32_read_write()
+        /*
         char* buf = (char *) malloc(512);
         fat32_read_write(s, "/foo.txt", buf, 0, 512, 0);
         DEBUG("content of foo.txt: %s\n", buf); 
         fat32_read_write(s, "/foo2.txt", buf, 0, 512, 0);
         DEBUG("content of foo2.txt: %s\n", buf); 
         free(buf);
+        */
 	return 0;
 }
 
