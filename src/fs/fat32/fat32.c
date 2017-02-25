@@ -69,14 +69,17 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     if (write) { // write
 
     } else { // read
+        long dest_off = 0;
         do {
             nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
             if (remainder > 0) {
-                memcpy(srcdest, (char *)buf + remainder, MIN(cluster_size - remainder, to_be_read));
+                memcpy(srcdest + dest_off, (char *)buf + remainder, MIN(cluster_size - remainder, to_be_read));
                 remainder = 0;
+                dest_off += MIN(cluster_size - remainder, to_be_read);
                 to_be_read = to_be_read - cluster_size + remainder;
             } else {
-                memcpy(srcdest, buf, MIN(to_be_read, cluster_size));
+                memcpy(srcdest + dest_off, buf, MIN(to_be_read, cluster_size));
+                dest_off += MIN(to_be_read, cluster_size);
                 to_be_read -= cluster_size;
             }
         } while (to_be_read > 0);
@@ -263,14 +266,14 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     	//path_lookup(s, "/foo2.txt");
 
         // tests read in fat32_read_write()
-        /*
+        
         char* buf = (char *) malloc(512);
         fat32_read_write(s, "/foo.txt", buf, 0, 512, 0);
         DEBUG("content of foo.txt: %s\n", buf); 
         fat32_read_write(s, "/foo2.txt", buf, 0, 512, 0);
         DEBUG("content of foo2.txt: %s\n", buf); 
         free(buf);
-        */
+        
 	return 0;
 }
 
