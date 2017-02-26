@@ -169,6 +169,7 @@ static dir_entry* path_lookup( struct fat32_state* state, char* path )
 			cluster_num = DECODE_CLUSTER(data.high_cluster,data.low_cluster);
 			DEBUG("cluster num is %d\n", cluster_num);	
 			debug_print_file(state, cluster_num, root_data[i].size);
+			//debug_print_file(state, cluster_num, 11);
 			return &data;			
 		}
 	}

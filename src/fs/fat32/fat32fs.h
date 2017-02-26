@@ -52,7 +52,7 @@ struct fat32_char {
 	uint32_t data_end; //end of data sectors
 };
 
-typedef union attributes
+union attributes
 {
    struct
    {
@@ -62,15 +62,15 @@ typedef union attributes
        char volumeid : 1;
        char dir : 1;
        char archive : 1; 
-   };
+   }each_att;
    char attris;
-}attributes;
+};
 
 typedef struct __attribute__((packed)) dir_entry 
 {
     char name[8];
     char ext[3];
-    attributes attri;  //attributs 
+    union attributes attri;  //attributs 
     char reserved0[8];
     uint16_t high_cluster;
     char reserved1[4];

@@ -43,14 +43,20 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     if (!dir) { // if dir doesn't exist
         return -1;
     }
-    if (offset >= dir->size) { // invalid offset
-        return -1;
+    uint32_t file_size = dir->size;
+    DEBUG("file_size = %u\n", file_size);
+    off_t remainder;
+    if(write){
+        if(dir->attri.each_att.readonly) return -1;  //check if file is read only
+        remainder = file_size;
     }
-
-    uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
-    long to_be_read = MIN(num_bytes, dir->size - offset);
-    off_t remainder = offset;
+    else{
+        if (offset >= file_size) return -1; // invalid offset
+        remainder = offset;
+    }
+    //off_t remainder = offset;
     uint32_t cluster_size = get_cluster_size(fs); // in bytes
+    uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);  //first cluster number of the file
     uint32_t cluster_min = fs->bootrecord.rootdir_cluster; // min valid cluster number
     uint32_t cluster_max = fs->table_chars.data_end - fs->table_chars.data_start; // max valid cluster number
     while(remainder > cluster_size)
@@ -62,14 +68,45 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
         cluster_num = next; 
         remainder -= cluster_size;
     }
-
-    void *buf = (void *) malloc(cluster_size);
+    
     DEBUG("remainder = %d\n", remainder);
-    DEBUG("to_be_read = %d\n", to_be_read);
+    //void *buf = (void *) malloc(cluster_size);
+    char buf[cluster_size];
     if (write) { // write
+        //offset will not be used for write function
+        //suppose we have the file
+        if(remainder == 0){
+            //allocate new cluster, block for write 
+        } else {
+            //1. fill up current block
+            //2. if it still has sth to write, allocate new block
+            int rc;
+            //update file content
+            nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
+            memcpy(buf+remainder-1, srcdest, MIN(cluster_size - remainder, num_bytes));
+            DEBUG("Num Bytes to be written: %d\n", MIN(cluster_size - remainder, num_bytes));
+            DEBUG("buf is %s\n", buf);
+            rc = nk_block_dev_write(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
+            if(rc){
+                ERROR("Failed to write on block.\n");
+            }
+
+            //Update directory entry
+            dir_entry dir_buf[32];
+            nk_block_dev_read(fs->dev, get_sector_num(fs->bootrecord.rootdir_cluster, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
+            file_size += MIN(cluster_size - remainder, num_bytes);
+            dir_buf[3].size = file_size; //TODO: Write function to find dir entry num
+            rc = nk_block_dev_write(fs->dev, get_sector_num(fs->bootrecord.rootdir_cluster, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
+            if(rc){
+                ERROR("Failed to write on block.\n");
+            }
+        }
 
     } else { // read
+        long to_be_read = MIN(num_bytes, file_size - offset);
+        DEBUG("to_be_read = %d\n", to_be_read);
         long dest_off = 0;
+        
         do {
             nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
             if (remainder > 0) {
@@ -84,7 +121,8 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
             }
         } while (to_be_read > 0);
     }
-    free(buf);
+    
+    //free(buf);
 
 	return 0;
 }
@@ -268,8 +306,10 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
         // tests read in fat32_read_write()
         
         char* buf = (char *) malloc(512);
-        fat32_read_write(s, "/foo.txt", buf, 0, 512, 0);
-        DEBUG("content of foo.txt: %s\n", buf); 
+         char src[4] = "abc";
+         fat32_read_write(s, "/foo.txt", src, 0, 4, 1);
+         path_lookup(s, "/foo.txt");
+        //DEBUG("content of foo.txt: %s\n", buf); 
         fat32_read_write(s, "/foo2.txt", buf, 0, 512, 0);
         DEBUG("content of foo2.txt: %s\n", buf); 
         free(buf);
