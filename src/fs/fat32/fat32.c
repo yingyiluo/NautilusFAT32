@@ -45,15 +45,15 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     }
     uint32_t file_size = dir->size;
     DEBUG("file_size = %u\n", file_size);
+    if (offset >= file_size) return -1; // invalid offset
     off_t remainder;
     if(write){
         if(dir->attri.each_att.readonly) return -1;  //check if file is read only
-        remainder = file_size;
-    }
-    else{
-        if (offset >= file_size) return -1; // invalid offset
+    }/*
+    else{ 
         remainder = offset;
-    }
+    }*/
+    remainder = offset;
     //off_t remainder = offset;
     uint32_t cluster_size = get_cluster_size(fs); // in bytes
     uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);  //first cluster number of the file
@@ -73,35 +73,43 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     //void *buf = (void *) malloc(cluster_size);
     char buf[cluster_size];
     if (write) { // write
-        //offset will not be used for write function
         //suppose we have the file
-        if(remainder == 0){
-            //allocate new cluster, block for write 
-        } else {
             //1. fill up current block
             //2. if it still has sth to write, allocate new block
-            int rc;
+        int rc;
+        long src_off = 0;
+        if(offset + num_bytes < file_size ) {  //don't need to allocate new block 
             //update file content
-            nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
-            memcpy(buf+remainder-1, srcdest, MIN(cluster_size - remainder, num_bytes));
-            DEBUG("Num Bytes to be written: %d\n", MIN(cluster_size - remainder, num_bytes));
-            DEBUG("buf is %s\n", buf);
-            rc = nk_block_dev_write(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
-            if(rc){
-                ERROR("Failed to write on block.\n");
-            }
+            do {
+                rc = nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
+                if(rc){
+                    ERROR("Failed to read on block.\n");
+                }
+                memcpy(buf+remainder, srcdest + src_off, MIN(cluster_size - remainder, num_bytes-src_off));
+                DEBUG("Num Bytes to be written: %d\n", MIN(cluster_size - remainder, num_bytes-src_off));
+                rc = nk_block_dev_write(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
+                if(rc){
+                    ERROR("Failed to write on block.\n");
+                }
+                src_off += MIN(cluster_size - remainder, num_bytes-src_off); 
+                remainder = 0;
+                uint32_t next = fs->table_chars.FAT32_begin[cluster_num];
+                //if( next >= EOC_MIN && next <= EOC_MAX ) break;
+                //if( next < cluster_min || next > cluster_max ) break;
+                cluster_num = next;
+            }while(src_off < num_bytes);
+        } else {  //need to allocate block
 
             //Update directory entry
             dir_entry dir_buf[32];
             nk_block_dev_read(fs->dev, get_sector_num(fs->bootrecord.rootdir_cluster, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
-            file_size += MIN(cluster_size - remainder, num_bytes);
-            dir_buf[3].size = file_size; //TODO: Write function to find dir entry num
+            
+            dir_buf[3].size = offset + MIN(cluster_size - remainder, num_bytes); //TODO: Write function to find dir entry num
             rc = nk_block_dev_write(fs->dev, get_sector_num(fs->bootrecord.rootdir_cluster, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
             if(rc){
                 ERROR("Failed to write on block.\n");
             }
         }
-
     } else { // read
         long to_be_read = MIN(num_bytes, file_size - offset);
         DEBUG("to_be_read = %d\n", to_be_read);
@@ -119,7 +127,14 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
                 dest_off += MIN(to_be_read, cluster_size);
                 to_be_read -= cluster_size;
             }
+            //update cluster number
+            uint32_t next = fs->table_chars.FAT32_begin[cluster_num];
+            if( next >= EOC_MIN && next <= EOC_MAX ) break;
+            if( next < cluster_min || next > cluster_max ) break;
+            cluster_num = next;
         } while (to_be_read > 0);
+
+        memset(srcdest + dest_off, 0, num_bytes - dest_off);
     }
     
     //free(buf);
@@ -303,15 +318,24 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     	//path_lookup(s, "/foo.txt"); 
     	//path_lookup(s, "/foo2.txt");
 
-        // tests read in fat32_read_write()
+        //read
+        char* buf = (char *) malloc(600);
+        fat32_read_write(s, "/foo.txt", buf, 0, 600, 0);
+        DEBUG("content of foo.txt: %s\n", buf); 
+        //write
+        char src[550];
+        for(int i = 0; i < 550; i++){
+            src[i] = '2';
+        }
+        fat32_read_write(s, "/foo.txt", src, 0, 550, 1);
+        //read
+        fat32_read_write(s, "/foo.txt", buf, 0, 600, 0);
+        DEBUG("content of foo.txt: %s\n", buf); 
         
-        char* buf = (char *) malloc(512);
-         char src[4] = "abc";
-         fat32_read_write(s, "/foo.txt", src, 0, 4, 1);
-         path_lookup(s, "/foo.txt");
+         //path_lookup(s, "/foo.txt");
         //DEBUG("content of foo.txt: %s\n", buf); 
-        fat32_read_write(s, "/foo2.txt", buf, 0, 512, 0);
-        DEBUG("content of foo2.txt: %s\n", buf); 
+        //fat32_read_write(s, "/foo2.txt", buf, 0, 512, 0);
+        //DEBUG("content of foo2.txt: %s\n", buf); 
         free(buf);
         
 	return 0;

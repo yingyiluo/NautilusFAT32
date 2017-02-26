@@ -162,13 +162,13 @@ static dir_entry* path_lookup( struct fat32_state* state, char* path )
 	int i, name_size, ext_size;
 	filename_parser(toUpperCase(path), file_name, file_ext, &name_size, &ext_size);
 	DEBUG("read file name is %s, ext is %s\n", file_name, file_ext);
-	for(i = 0; i < state->bootrecord.sector_size/sizeof(dir_entry); i++){
+	for(i = 0; i < FLOOR_DIV(state->bootrecord.sector_size, sizeof(dir_entry)); i++){
 		dir_entry data = root_data[i];
 		DEBUG("i is %d, dir_entry name is %s, ext is %s\n", i, data.name, data.ext);	
 		if( strncmp(data.name, file_name, name_size) == 0 && strncmp(data.ext, file_ext, ext_size) == 0){
 			cluster_num = DECODE_CLUSTER(data.high_cluster,data.low_cluster);
 			DEBUG("cluster num is %d\n", cluster_num);	
-			debug_print_file(state, cluster_num, root_data[i].size);
+			//debug_print_file(state, cluster_num, root_data[i].size);
 			//debug_print_file(state, cluster_num, 11);
 			return &data;			
 		}
