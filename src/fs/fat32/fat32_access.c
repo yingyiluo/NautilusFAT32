@@ -171,11 +171,9 @@ static int path_lookup( struct fat32_state* state, char* path, uint32_t * dir_cl
 			DEBUG("cluster num is %d\n", cluster_num);	
 			//debug_print_file(state, cluster_num, root_data[i].size);
 			//debug_print_file(state, cluster_num, 11);
-			free(root_data);
 			return i;			
 		}
 	}
-	free(root_data);
 	return -1; //cannot find file
 }
 
@@ -189,6 +187,7 @@ int alloc_block(struct fat32_state* state, uint32_t cluster_entry, uint32_t num)
 		uint32_t tmp = fat[i];
 		if( (tmp << 1) == FREE_CLUSTER ){
 			//update FAT table
+			DEBUG("ALLOC BLOCK: i is %u\n", i);
 			fat[cluster_entry] = i;
 			count++;
 			cluster_entry = i;
