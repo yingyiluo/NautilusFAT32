@@ -39,7 +39,13 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
 {
 	if(srcdest == NULL) return -1; // if buffer is NULL
     struct fat32_state *fs = (struct fat32_state *) state;
-    dir_entry *dir = path_lookup(fs, (char*) file);
+    uint32_t dir_cluster_num;
+    int dir_num = path_lookup(fs, (char*) file, &dir_cluster_num);
+    if(dir_num == -1) return -1;
+    dir_entry full_dirs[fs->bootrecord.directory_entry_num];
+    nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
+    dir_entry *dir = &full_dirs[dir_num];
+
     if (!dir) { // if dir doesn't exist
         return -1;
     }
@@ -117,19 +123,29 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
                 if( next < cluster_min || ( next > cluster_max && next < EOC_MIN ) ) return -1;
             }
             //2. if it still has sth to write, allocate new block
-            uint32_t new_cluster_num = alloc_block(fs, cluster_num);
-            memset(buf, 0, cluster_size);
-            memcpy(buf, srcdest + src_off, MIN(cluster_size, num_bytes-src_off));
-            rc = nk_block_dev_write(fs->dev, get_sector_num(new_cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
-            if(rc){
-                ERROR("Failed to write on block.\n");
-            }
+            uint32_t num_allocate = CEIL_DIV(num_bytes - src_off, cluster_size);
+            if( alloc_block(fs, cluster_num, num_allocate) == -1 ) return -1;
+            do{
+                memset(buf, 0, cluster_size);
+                memcpy(buf, srcdest + src_off, MIN(cluster_size, num_bytes-src_off));
+                rc = nk_block_dev_write(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
+                if(rc){
+                    //TODO: RESTORE THE FILE
+                    ERROR("Failed to write on block.\n");
+                }
+                src_off += MIN(cluster_size, num_bytes-src_off); 
+                cluster_num = fs->table_chars.FAT32_begin[cluster_num];
+            }while(num_bytes > src_off);
+
             //Update directory entry
-            dir_entry dir_buf[32];
-            nk_block_dev_read(fs->dev, get_sector_num(fs->bootrecord.rootdir_cluster, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
-            
-            dir_buf[3].size = offset + num_bytes + 1; //TODO: Write function to find dir entry num
-            rc = nk_block_dev_write(fs->dev, get_sector_num(fs->bootrecord.rootdir_cluster, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
+            dir_entry dir_buf[fs->bootrecord.directory_entry_num];
+            nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
+            if(rc){
+                ERROR("Failed to read on block.\n");
+            }
+            uint32_t new_file_size = offset + num_bytes + 1; 
+            dir_buf[dir_num].size = new_file_size; 
+            rc = nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
             if(rc){
                 ERROR("Failed to write on block.\n");
             }
@@ -214,7 +230,8 @@ static int fat32_create_dir(void *state, char *path)
 static int fat32_exists(void *state, char *path)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
-    return path_lookup(fs, path) != NULL;
+    uint32_t dir_cluster;
+    return path_lookup(fs, path, &dir_cluster) != -1;
     //DEBUG("exists(%s,%s)?\n",fs->fs->name,path);
    // uint32_t inode_num = get_inode_num_by_path(fs, path);
    // return inode_num != 0;
@@ -228,7 +245,13 @@ int fat32_remove(void *state, char *path)
 static void * fat32_open(void *state, char *path)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
-    dir_entry *dir = path_lookup(fs, path);
+
+    uint32_t dir_cluster_num;
+    int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num);
+    if(dir_num == -1) return NULL;
+    dir_entry full_dirs[fs->bootrecord.directory_entry_num];
+    nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
+    dir_entry *dir = &full_dirs[dir_num];
     uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     DEBUG("open of %s returned cluster number %u\n", path, cluster_num);
     return (void*)(uint32_t)cluster_num;
@@ -343,19 +366,20 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     	//path_lookup(s, "/foo2.txt");
 
         //read
-        char* buf = (char *) malloc(600);
+        char* buf = (char *) malloc(1100);
         fat32_read_write(s, "/foo.txt", buf, 0, 600, 0);
         DEBUG("content of foo.txt: %s\n", buf); 
         //write
+        /*
         char src[550];
         for(int i = 0; i < 550; i++){
             src[i] = '2';
         }
-        fat32_read_write(s, "/foo.txt", src, 0, 550, 1);
+        fat32_read_write(s, "/foo.txt", src, 500, 550, 1);
         //read
-        fat32_read_write(s, "/foo.txt", buf, 0, 600, 0);
+        fat32_read_write(s, "/foo.txt", buf, 0, 1050, 0);
         DEBUG("content of foo.txt: %s\n", buf); 
-        
+        */
          //path_lookup(s, "/foo.txt");
         //DEBUG("content of foo.txt: %s\n", buf); 
         //fat32_read_write(s, "/foo2.txt", buf, 0, 512, 0);
