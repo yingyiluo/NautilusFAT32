@@ -175,3 +175,24 @@ static dir_entry* path_lookup( struct fat32_state* state, char* path )
 	}
 	return NULL; //cannot find file
 }
+
+uint32_t alloc_block(struct fat32_state* state, uint32_t cluster_entry) {
+	uint32_t * fat = state->table_chars.FAT32_begin;
+	uint32_t size = state->table_chars.FAT32_size; 
+	uint32_t start = state->bootrecord.rootdir_cluster;
+	uint32_t new_cluster = 0; 
+	for(uint32_t i = start; i < size; i++) {
+		uint32_t tmp = fat[i];
+		if( (tmp << 1) == FREE_CLUSTER ){
+			new_cluster = i;
+			//update FAT table
+			fat[cluster_entry] = new_cluster;
+			fat[new_cluster] = EOC_MIN;
+			nk_block_dev_write(state->dev, state->bootrecord.reservedblock_size, size, fat, NK_DEV_REQ_BLOCKING);
+			nk_block_dev_write(state->dev, state->bootrecord.reservedblock_size+size, size, fat, NK_DEV_REQ_BLOCKING);
+			break;
+		}
+	}
+
+	return new_cluster; //return 0 if gets error
+}

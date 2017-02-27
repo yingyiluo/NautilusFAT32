@@ -74,8 +74,6 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     char buf[cluster_size];
     if (write) { // write
         //suppose we have the file
-            //1. fill up current block
-            //2. if it still has sth to write, allocate new block
         int rc;
         long src_off = 0;
         if(offset + num_bytes < file_size ) {  //don't need to allocate new block 
@@ -99,12 +97,38 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
                 cluster_num = next;
             }while(src_off < num_bytes);
         } else {  //need to allocate block
-
+            //1. fill up current block
+            uint32_t next = cluster_num;
+            while( ! (next >= EOC_MIN && next <= EOC_MAX) ) {
+                cluster_num = next;
+                rc = nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
+                if(rc){
+                    ERROR("Failed to read on block.\n");
+                }
+                memcpy(buf+remainder, srcdest + src_off, MIN(cluster_size - remainder, num_bytes-src_off));
+                DEBUG("Num Bytes to be written: %d\n", MIN(cluster_size - remainder, num_bytes-src_off));
+                rc = nk_block_dev_write(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
+                if(rc){
+                    ERROR("Failed to write on block.\n");
+                }
+                src_off += MIN(cluster_size - remainder, num_bytes-src_off); 
+                remainder = 0;
+                next = fs->table_chars.FAT32_begin[cluster_num];
+                if( next < cluster_min || ( next > cluster_max && next < EOC_MIN ) ) return -1;
+            }
+            //2. if it still has sth to write, allocate new block
+            uint32_t new_cluster_num = alloc_block(fs, cluster_num);
+            memset(buf, 0, cluster_size);
+            memcpy(buf, srcdest + src_off, MIN(cluster_size, num_bytes-src_off));
+            rc = nk_block_dev_write(fs->dev, get_sector_num(new_cluster_num, fs), fs->bootrecord.cluster_size, buf, NK_DEV_REQ_BLOCKING);
+            if(rc){
+                ERROR("Failed to write on block.\n");
+            }
             //Update directory entry
             dir_entry dir_buf[32];
             nk_block_dev_read(fs->dev, get_sector_num(fs->bootrecord.rootdir_cluster, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
             
-            dir_buf[3].size = offset + MIN(cluster_size - remainder, num_bytes); //TODO: Write function to find dir entry num
+            dir_buf[3].size = offset + num_bytes + 1; //TODO: Write function to find dir entry num
             rc = nk_block_dev_write(fs->dev, get_sector_num(fs->bootrecord.rootdir_cluster, fs), fs->bootrecord.cluster_size, dir_buf, NK_DEV_REQ_BLOCKING);
             if(rc){
                 ERROR("Failed to write on block.\n");
