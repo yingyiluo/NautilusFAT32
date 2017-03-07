@@ -382,6 +382,7 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     	//path_lookup(s, "/foo2.txt");
 
         //read
+        /*
         char* buf = (char *) malloc(600);
         fat32_read_write(s, "/foo2.txt", buf, 0, 10, 0);
         DEBUG("content of foo2.txt: %s\n", buf); 
@@ -395,13 +396,15 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
         //read
         fat32_read_write(s, "/foo2.txt", buf, 0, 600, 0);
         DEBUG("content of foo2.txt: %s\n", buf); 
-        
+        */
+        int num;
+        split_path("/root/foo/hello.txt", &num);
         
          //path_lookup(s, "/foo.txt");
         //DEBUG("content of foo.txt: %s\n", buf); 
         //fat32_read_write(s, "/foo2.txt", buf, 0, 512, 0);
         //DEBUG("content of foo2.txt: %s\n", buf); 
-        free(buf);
+       // free(buf);
         
 	return 0;
 }

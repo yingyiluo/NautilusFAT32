@@ -90,6 +90,52 @@ static uint32_t get_sector_num(uint32_t cluster_num, struct fat32_state* fs)
 	return num;
 }
 
+/* split_path
+ *
+ * returns an array of each part of a filepath
+ * i.e. split_path("/a/b/c") = {"a", "b", "c"}
+ * also puts the number of parts into the specified location for convenience
+ */
+static char** split_path(char *path, int *num_parts) 
+{
+    int num_slashes = 0;
+    for (char * slash = path; slash != NULL; slash = strchr(slash + 1, '/')) {
+	num_slashes++;
+    }
+	
+    *num_parts = num_slashes;
+    // Copy out each piece by advancing two pointers (piece_start and slash).
+    char **parts = (char **)malloc(num_slashes*sizeof(char *));
+    char *piece_start = path + 1;
+    int i = 0;
+    for (char *slash = strchr(path + 1, '/'); slash != NULL; slash = strchr(slash + 1, '/')) {
+		int part_len = slash - piece_start;
+		parts[i] = (char *) malloc((part_len + 1)*sizeof(char));
+		strncpy(parts[i], piece_start, part_len);
+		piece_start = slash + 1;
+		i++;
+    }
+    // Get the last piece.
+    parts[i] = (char *)malloc((strlen(piece_start) + 1)*sizeof(char));
+    strcpy(parts[i], " ");
+    strcpy(parts[i], piece_start);
+    DEBUG("num_parts is %d\n", *num_parts);
+    for(int n = 0; n <= i; n++){
+    	DEBUG("parts[%d] is %s\n", n, parts[n]);
+    }
+   
+    return parts;
+}
+
+static void free_split_path(char **list, int n)
+{
+    int i;
+    for (i=0;i<n;i++) { 
+		free(list[i]);
+    }
+    free(list);
+}
+
 static void filename_parser(char* path, char* name, char* ext, int* name_s, int* ext_s)
 {
 	int i = 1; 
@@ -144,9 +190,13 @@ static char* toUpperCase(char* s) {
 
 static int path_lookup( struct fat32_state* state, char* path, uint32_t * dir_cluster_num )
 {
+	int num_parts;
+	char** parts = split_path(path, &num_parts);
+	uint32_t dir_entry_num = FLOOR_DIV(state->bootrecord.sector_size, sizeof(dir_entry));
+	
 	uint32_t root_sector = get_sector_num(state->bootrecord.rootdir_cluster, state);
 	*dir_cluster_num = state->bootrecord.rootdir_cluster;  
-	DEBUG("table entry[2] = %x\n", state->table_chars.FAT32_begin[2]);
+	//DEBUG("table entry[2] = %x\n", state->table_chars.FAT32_begin[2]);
 	DEBUG("root sector num is %d\n", root_sector);
 	DEBUG("directory entry size %d\n", sizeof(dir_entry));
 	dir_entry* root_data = (dir_entry*)malloc(state->bootrecord.sector_size);
@@ -163,7 +213,7 @@ static int path_lookup( struct fat32_state* state, char* path, uint32_t * dir_cl
 	int i, name_size, ext_size;
 	filename_parser(toUpperCase(path), file_name, file_ext, &name_size, &ext_size);
 	DEBUG("read file name is %s, ext is %s\n", file_name, file_ext);
-	for(i = 0; i < FLOOR_DIV(state->bootrecord.sector_size, sizeof(dir_entry)); i++){
+	for(i = 0; i < dir_entry_num; i++){
 		dir_entry data = root_data[i];
 		DEBUG("i is %d, dir_entry name is %s, ext is %s\n", i, data.name, data.ext);	
 		if( strncmp(data.name, file_name, name_size) == 0 && strncmp(data.ext, file_ext, ext_size) == 0){
