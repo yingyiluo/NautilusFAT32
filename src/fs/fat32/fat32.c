@@ -224,19 +224,88 @@ static int fat32_stat_path(void *state, char *path, struct nk_fs_stat *st)
 
 static void *fat32_create(void *state, char *path, int dir)
 {
-	return;
+    /*
+    char *fd[2] = {"file","dir"};
+    dir &= 0x1;
+    struct fat32_state *fs = (struct fat32_state *)state;
+    DEBUG("create %s %s on fs %s\n", fd[dir], path, fs->fs->name);
+
+    if (fat32_exists(state, path)) {
+        return -1; // file already exists
+    }
+    
+    int num_parts = 0;
+    char **parts = split_path(path, &num_parts);
+    if (!num_parts) {
+        ERROR("Impossible path %s\n", path);
+        free_split_path(parts,num_parts);
+        return 0;
+    }
+
+    char *name = parts[num_parts - 1]; // get name of file
+    char path_without_name[strlen(path)];
+    strncpy(path_without_name, path, strlen(path));
+    for (int i = strlen(path_without_name); i >= 0; --i) {
+        if (path_without_name[i] == '/') {
+            path_without_name[i] = 0; // get path (excluding name) of file
+        }
+    }
+
+    // for path "/a/b/c/name", get dir_entry of c
+    uint32_t dir_cluster;
+    int dir_num = path_lookup(fs, path_without_name, &dir_cluster_num);
+    if(dir_num == -1) {
+        return -1;
+    }
+    uint32_t num_dir_entry_per_file = FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry));
+    dir_entry full_dirs[num_dir_entry_per_file]; // cluster containing dir_entry of c
+    nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
+    DEBUG("dir_num is %d\n", dir_num);
+    dir_entry *dir = &(full_dirs[dir_num]); // dir entry of c in b
+
+    // 
+    uint32_t * fat = state->table_chars.FAT32_begin;
+    int cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
+    while (fat[cluster_num] != EOC_MIN) { // find the last cluster of c
+        cluster_num = fat[cluster_num];
+    }
+    dir_entry full_dirs2[num_dir_entry_per_file]; // last cluster of c
+    nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), 1, full_dirs2, NK_DEV_REQ_BLOCKING);
+    int i = 0;
+    while (full_dirs2[i].name[0] != 0) { // dir_entry already used
+        ++i;
+    }
+    if (i == num_dir_entry_per_file) { // cluster is full of dir_entry ==> extend current file
+        if (alloc_block(fs, cluster_num, 1) == -1) { // out of memory
+            return -1;
+        }
+        cluster_num = fat[cluster_num]; // advance to the allocated cluster
+        i = 0; // start of cluster
+        nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), 1, full_dirs2, NK_DEV_REQ_BLOCKING); // read the new cluster of c
+    }
+    // fill info in dir_entry full_dirs2[i]??
+    // ...
+
+    dir->size += sizeof(dir_entry); // increment size of c in (dir entry of c in b)
+    // write back to disk??
+    int rc = nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), fs->bootrecord.cluster_size, full_dirs, NK_DEV_REQ_BLOCKING);
+    if(rc){
+        ERROR("Failed to write on block.\n");
+    }
+    // what to return??
+    */
+    return;
 }
 
 static void *fat32_create_file(void *state, char *path)
 {
-    return ;
+    return fat32_create(state, path, 0);
 }
 
 static int fat32_create_dir(void *state, char *path)
 {
-    void *f = fat32_create(state,path,1);
-
-    if (!f) {
+    void *dir = fat32_create(state,path,1);
+    if (!dir) {
         return -1;
     } else {
         return 0;
