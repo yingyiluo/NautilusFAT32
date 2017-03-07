@@ -238,21 +238,32 @@ int alloc_block(struct fat32_state* state, uint32_t cluster_entry, uint32_t num)
 		if( (tmp << 1) == FREE_CLUSTER ){
 			//update FAT table
 			DEBUG("ALLOC BLOCK: i is %u\n", i);
-			fat[cluster_entry] = i;
-			count++;
-			cluster_entry = i;
+			if (cluster_entry_cpy == -1) { // alloc block for new file
+				fat[i] = EOC_MIN;
+				return i;
+			} else { // extend current file
+				fat[cluster_entry] = i;
+				count++;
+				cluster_entry = i;
+			}
 		}
 		if(count == num) break;
 	}
 
+	if (cluster_entry_cpy == -1) { // alloc blcok for new file & out of memory
+		return -1;
+	}
 	fat[cluster_entry] = EOC_MIN;
-	if(count < num){
-		//restore fat 
-		while(cluster_entry_cpy != EOC_MIN){
-			uint32_t next = fat[cluster_entry_cpy];
+	if(count < num){ // extend current file & out of memory ==> undo allocation
+		uint32_t next = fat[cluster_entry_cpy];
+		fat[cluster_entry_cpy] = ECO_MIN;
+		cluster_entry_cpy = next;
+		while(cluster_entry_cpy != EOC_MIN) {
+			next = fat[cluster_entry_cpy];
 			fat[cluster_entry_cpy] = FREE_CLUSTER;
 			cluster_entry_cpy = next;
 		}
+		fat[cluster_entry_cpy] = FREE_CLUSTER;
 		//nk_block_dev_read(state->dev, state->bootrecord.reservedblock_size, size, state->table_chars.FAT32_begin, NK_DEV_REQ_BLOCKING);
 		return -1;
 	}
