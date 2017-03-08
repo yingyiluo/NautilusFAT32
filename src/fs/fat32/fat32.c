@@ -40,13 +40,15 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
 	if(srcdest == NULL) return -1; // if buffer is NULL
     struct fat32_state *fs = (struct fat32_state *) state;
     uint32_t dir_cluster_num;
-    int dir_num = path_lookup(fs, (char*) file, &dir_cluster_num);
+    dir_entry *dir;
+    int dir_num = path_lookup(fs, (char*) file, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return -1;
-
+/*
     dir_entry full_dirs[FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry))];
     nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
     DEBUG("dir_num is %d\n", dir_num);
     dir_entry *dir = &(full_dirs[dir_num]);
+    */
 /*
     if (!dir) { // if dir doesn't exist
         return -1;
@@ -189,7 +191,7 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
            // if( next < cluster_min || next > cluster_max ) break;
             cluster_num = next;
         } while (to_be_read > 0);
-        DEBUG("FILE IS %s\n", srcdest+1024);
+        //DEBUG("FILE IS %s\n", srcdest+1024);
         //memset(srcdest + dest_off, 0, num_bytes - dest_off);
     }
     
@@ -221,6 +223,7 @@ static int fat32_stat_path(void *state, char *path, struct nk_fs_stat *st)
    // return ext2_stat(state,(void*)(uint64_t)inum,st);
    return -1;
 }
+
 
 static void *fat32_create(void *state, char *path, int dir)
 {
@@ -304,8 +307,9 @@ static void *fat32_create_file(void *state, char *path)
 
 static int fat32_create_dir(void *state, char *path)
 {
-    void *dir = fat32_create(state,path,1);
-    if (!dir) {
+    void *f = fat32_create(state,path,1);
+
+    if (!f) {
         return -1;
     } else {
         return 0;
@@ -315,11 +319,8 @@ static int fat32_create_dir(void *state, char *path)
 static int fat32_exists(void *state, char *path)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
-    uint32_t dir_cluster;
-    return path_lookup(fs, path, &dir_cluster) != -1;
-    //DEBUG("exists(%s,%s)?\n",fs->fs->name,path);
-   // uint32_t inode_num = get_inode_num_by_path(fs, path);
-   // return inode_num != 0;
+    //uint32_t dir_cluster;
+    return path_lookup(fs, path, NULL, NULL, 0) != -1;
 }
 
 int fat32_remove(void *state, char *path)
@@ -332,11 +333,14 @@ static void * fat32_open(void *state, char *path)
     struct fat32_state *fs = (struct fat32_state *)state;
 
     uint32_t dir_cluster_num;
-    int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num);
+    dir_entry *dir;
+    int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return NULL;
+    /*
     dir_entry full_dirs[FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry))];
     nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
     dir_entry *dir = &full_dirs[dir_num];
+    */
     uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     DEBUG("open of %s returned cluster number %u\n", path, cluster_num);
     return (void*)(uint32_t)cluster_num;
@@ -446,34 +450,32 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     	}
 
     	INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
-        // tests lookup
-    	//path_lookup(s, "/foo.txt"); 
-    	//path_lookup(s, "/foo2.txt");
 
         //read
-        /*
-        char* buf = (char *) malloc(600);
-        fat32_read_write(s, "/foo2.txt", buf, 0, 10, 0);
-        DEBUG("content of foo2.txt: %s\n", buf); 
+        char* buf = (char *) malloc(1100);
+        fat32_read_write(s, "/test/hello.txt", buf, 0, 100, 0);
+        DEBUG("content of hello.txt: %s\n", buf); 
         //write
+       
+        
+        int num;
+        path_lookup(s, "/test/files", &num, NULL, 1);
+        DEBUG("num is %d\n", num);
         
         char src[600];
         for(int i = 0; i < 600; i++){
             src[i] = 'y';
         }
-        fat32_read_write(s, "/foo2.txt", src, 0, 600, 1);
+        fat32_read_write(s, "/foo.txt", src, 599, 600, 1);
         //read
-        fat32_read_write(s, "/foo2.txt", buf, 0, 600, 0);
-        DEBUG("content of foo2.txt: %s\n", buf); 
-        */
+        fat32_read_write(s, "/foo.txt", buf, 0, 1100, 0);
+        DEBUG("content of foo.txt: %s\n", buf); 
+        free(buf);
+        /*
         int num;
-        split_path("/root/foo/hello.txt", &num);
+        path_lookup(s, "/test/hello.txt", &num);
+        */
         
-         //path_lookup(s, "/foo.txt");
-        //DEBUG("content of foo.txt: %s\n", buf); 
-        //fat32_read_write(s, "/foo2.txt", buf, 0, 512, 0);
-        //DEBUG("content of foo2.txt: %s\n", buf); 
-       // free(buf);
         
 	return 0;
 }

@@ -138,30 +138,30 @@ static void free_split_path(char **list, int n)
 
 static void filename_parser(char* path, char* name, char* ext, int* name_s, int* ext_s)
 {
-	int i = 1; 
+	
+	int i = 0; 
 	int ext_i = 0;
 	//needs to handle directory(use split_path function)
 	//validate file name(eg: length)
 	//further optimization: handle long file name; handle relative path 
-	while(path[i] != '.')
-	{
-		name[i-1] = path[i];
+	while(path[i] != '.') {
+		name[i] = path[i];
 		i++;
 	}
 		
-	*name_s = i-1;
+	*name_s = i;
 	if (*name_s < 8) {
 		name[(*name_s)++] = ' '; // append a space if name < 8 chars
 	}
+
 	i++;
-	while(path[i] != '\0')
-	{
+	while(path[i] != '\0') {
 		ext[ext_i] = path[i];
 		i++;
 		ext_i++;
 	}
 	*ext_s = ext_i; 
-	if (*ext_s < 3) {
+	if (*ext_s >0 && *ext_s < 3) {
 		ext[(*ext_s)++] = ' '; // append a space if ext < 3 chars
 	}
 }
@@ -188,20 +188,63 @@ static char* toUpperCase(char* s) {
 	return s;
 }
 
-static int path_lookup( struct fat32_state* state, char* path, uint32_t * dir_cluster_num )
+static int path_lookup( struct fat32_state* state, char* path, uint32_t* dir_cluster_num, dir_entry* file_entry, int is_dir)
 {
+	char found = 0;
 	int num_parts;
-	char** parts = split_path(path, &num_parts);
+	char** parts = split_path(toUpperCase(path), &num_parts);
+	uint32_t clu_per_sec = state->bootrecord.cluster_size;
 	uint32_t dir_entry_num = FLOOR_DIV(state->bootrecord.sector_size, sizeof(dir_entry));
-	
-	uint32_t root_sector = get_sector_num(state->bootrecord.rootdir_cluster, state);
-	*dir_cluster_num = state->bootrecord.rootdir_cluster;  
+	uint32_t cluster_min = state->bootrecord.rootdir_cluster; // min valid cluster number
+    uint32_t cluster_max = state->table_chars.data_end - state->table_chars.data_start;
+	*dir_cluster_num = state->bootrecord.rootdir_cluster;
+	uint32_t dir_sector = get_sector_num(*dir_cluster_num, state);
+	  
 	//DEBUG("table entry[2] = %x\n", state->table_chars.FAT32_begin[2]);
-	DEBUG("root sector num is %d\n", root_sector);
+	DEBUG("root sector num is %d\n", dir_sector);
 	DEBUG("directory entry size %d\n", sizeof(dir_entry));
-	dir_entry* root_data = (dir_entry*)malloc(state->bootrecord.sector_size);
-	nk_block_dev_read(state->dev, root_sector, 1, root_data, NK_DEV_REQ_BLOCKING);
-
+	//dir_entry* root_data = (dir_entry*)malloc(state->bootrecord.sector_size);
+	//nk_block_dev_read(state->dev, root_sector, 1, root_data, NK_DEV_REQ_BLOCKING);
+	dir_entry dir_data[dir_entry_num];
+	for(int n = 0; n < (num_parts-1); n++){
+		char* dir_name = parts[n];
+		int dir_len = strlen(dir_name);
+		DEBUG("dir_len is %d\n", dir_len);
+		DEBUG("dir_name is %s\n", dir_name);
+		while(! (*dir_cluster_num >= EOC_MIN && *dir_cluster_num <= EOC_MAX) ){
+		    nk_block_dev_read(state->dev, dir_sector, clu_per_sec, dir_data, NK_DEV_REQ_BLOCKING);	
+			for(int k = 0; k < dir_entry_num; k++){
+				dir_entry data = dir_data[k];
+				DEBUG("k is %d, dir_entry name is %s, ext is %s, cluster number is %d\n", k, data.name, data.ext, 
+					DECODE_CLUSTER(data.high_cluster,data.low_cluster));
+				DEBUG("is directory: %d\n", data.attri.each_att.dir);
+				if(data.attri.each_att.dir != 0 && strncmp(data.name, dir_name, dir_len) == 0){
+				//if(strncmp(data.name, dir_name, dir_len) == 0){
+					*dir_cluster_num = DECODE_CLUSTER(data.high_cluster,data.low_cluster);
+					dir_sector = get_sector_num(*dir_cluster_num, state);
+					found = 1;
+					break;
+				}
+			}
+			if(found == 1){
+				break; 
+			}else{
+				*dir_cluster_num = state->table_chars.FAT32_begin[*dir_cluster_num];
+				if(*dir_cluster_num < cluster_min || ( *dir_cluster_num > cluster_max && *dir_cluster_num < EOC_MIN )){
+					free_split_path(parts, num_parts);
+					return -1;
+				}
+				dir_sector = get_sector_num(*dir_cluster_num, state);
+			}
+		}
+		if(found == 0){
+			DEBUG("could not find directory %s\n", dir_name);
+			free_split_path(parts, num_parts);
+			return -1;
+		}else{
+			found = 0;
+		}
+	}
 	/*	
 	while(){
 		//if not found and more cluster
@@ -209,21 +252,51 @@ static int path_lookup( struct fat32_state* state, char* path, uint32_t * dir_cl
 	}*/
 	char file_name[8];
 	char file_ext[3];
-	uint32_t cluster_num;
 	int i, name_size, ext_size;
-	filename_parser(toUpperCase(path), file_name, file_ext, &name_size, &ext_size);
-	DEBUG("read file name is %s, ext is %s\n", file_name, file_ext);
-	for(i = 0; i < dir_entry_num; i++){
-		dir_entry data = root_data[i];
-		DEBUG("i is %d, dir_entry name is %s, ext is %s\n", i, data.name, data.ext);	
-		if( strncmp(data.name, file_name, name_size) == 0 && strncmp(data.ext, file_ext, ext_size) == 0){
-			cluster_num = DECODE_CLUSTER(data.high_cluster,data.low_cluster);
-			DEBUG("cluster num is %d\n", cluster_num);	
-			//debug_print_file(state, cluster_num, root_data[i].size);
-			//debug_print_file(state, cluster_num, 11);
-			return i;			
-		}
+	if(is_dir == 0){
+		filename_parser(parts[num_parts-1], file_name, file_ext, &name_size, &ext_size);
+	}else{
+		name_size = strlen(parts[num_parts-1]);
+		strncpy(file_name, parts[num_parts-1], name_size);
+		ext_size = 0;
+		
 	}
+
+	DEBUG("read file name is %s, ext is %s, ext_size is %d\n", file_name, file_ext, ext_size);
+	while(! (*dir_cluster_num >= EOC_MIN && *dir_cluster_num <= EOC_MAX) ){
+		nk_block_dev_read(state->dev, dir_sector, clu_per_sec, dir_data, NK_DEV_REQ_BLOCKING);
+		for(i = 0; i < dir_entry_num; i++){
+			dir_entry data = dir_data[i];
+			DEBUG("i is %d, dir_entry name is %s, ext is %s, cluster_num is %d\n", i, data.name, data.ext,
+				DECODE_CLUSTER(data.high_cluster,data.low_cluster));	
+			if( strncmp(data.name, file_name, name_size) == 0 ){
+				DEBUG("enter if statement.\n");
+				if(ext_size == 0 ){
+					uint32_t cluster_num = DECODE_CLUSTER(data.high_cluster,data.low_cluster);
+					DEBUG("cluster num is %d\n", cluster_num);	
+					//debug_print_file(state, cluster_num, root_data[i].size);
+					*file_entry = data;
+					return i; //return the position of file in the directory
+				}else{
+					if(strncmp(data.ext, file_ext, ext_size) == 0){
+						*file_entry = data;
+						uint32_t cluster_num = DECODE_CLUSTER(data.high_cluster, data.low_cluster);
+						DEBUG("cluster num is %d\n", cluster_num);	
+						//debug_print_file(state, cluster_num, root_data[i].size);
+						return i; //return the position of file in the directory
+					}
+				}
+			}
+		}
+		*dir_cluster_num = state->table_chars.FAT32_begin[*dir_cluster_num];
+			if(*dir_cluster_num < cluster_min || ( *dir_cluster_num > cluster_max && *dir_cluster_num < EOC_MIN )){
+				free_split_path(parts, num_parts);
+				return -1;
+			}
+		dir_sector = get_sector_num(*dir_cluster_num, state);
+	}
+
+	free_split_path(parts, num_parts);
 	return -1; //cannot find file
 }
 
