@@ -329,7 +329,7 @@ int alloc_block(struct fat32_state* state, uint32_t cluster_entry, uint32_t num)
 	fat[cluster_entry] = EOC_MIN;
 	if(count < num){ // extend current file & out of memory ==> undo allocation
 		uint32_t next = fat[cluster_entry_cpy];
-		fat[cluster_entry_cpy] = ECO_MIN;
+		fat[cluster_entry_cpy] = EOC_MIN;
 		cluster_entry_cpy = next;
 		while(cluster_entry_cpy != EOC_MIN) {
 			next = fat[cluster_entry_cpy];
