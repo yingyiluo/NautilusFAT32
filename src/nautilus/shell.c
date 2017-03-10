@@ -172,6 +172,7 @@ static int launch_periodic_burner(char *name, uint64_t size_ns, uint32_t tpr, ui
 static int handle_cat(char *buf)
 {
     char data[MAX_CMD];
+    //char data[1200];
     ssize_t ct, i;
 
     buf+=3;

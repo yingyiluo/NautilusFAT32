@@ -56,7 +56,8 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     uint32_t file_size = dir->size;
     DEBUG("offset = %lu\n", offset);
     DEBUG("file_size = %u\n", file_size);
-    if (offset >= (off_t)file_size) return -1; // invalid offset
+    if (offset > (off_t)file_size) return -1; // invalid offset
+    if (offset == (off_t)file_size) return 0;
     off_t remainder;
     if(write){
         if(dir->attri.each_att.readonly) return -1;  //check if file is read only
@@ -163,6 +164,7 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
                 ERROR("Failed to write on block.\n");
             }
         }
+        return src_off;
     } else { // read
         long to_be_read = MIN(num_bytes, file_size - offset);
         DEBUG("to_be_read = %d\n", to_be_read);
@@ -191,13 +193,12 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
            // if( next < cluster_min || next > cluster_max ) break;
             cluster_num = next;
         } while (to_be_read > 0);
+
+        return MIN(num_bytes, file_size - offset);
         //DEBUG("FILE IS %s\n", srcdest+1024);
         //memset(srcdest + dest_off, 0, num_bytes - dest_off);
     }
     
-    //free(buf);
-
-	return 0;
 }
 
 static ssize_t fat32_read(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes)
@@ -325,6 +326,11 @@ static int fat32_exists(void *state, char *path)
 
 int fat32_remove(void *state, char *path)
 {
+    struct fat32_state *fs = (struct fat32_state *) state;
+    uint32_t dir_cluster_num;
+    dir_entry *dir;
+    int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num, dir, 0);
+    if(dir_num == -1) return -1;
     return -1;
 }
 
@@ -341,9 +347,9 @@ static void * fat32_open(void *state, char *path)
     nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
     dir_entry *dir = &full_dirs[dir_num];
     */
-    uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
-    DEBUG("open of %s returned cluster number %u\n", path, cluster_num);
-    return (void*)(uint32_t)cluster_num;
+    //uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
+    //DEBUG("open of %s returned cluster number %u\n", path, cluster_num);
+    return (void*)path;
 }
 
 static int fat32_stat(void *state, void *file, struct nk_fs_stat *st)
@@ -356,17 +362,16 @@ static int fat32_truncate(void *state, void *file, off_t len)
 {
     return -1;
 }
+
 static void fat32_close(void *state, void *file)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
-
-    DEBUG("closing inode %u\n",(uint32_t)(uint64_t)file);
-
-    // ideally FS would track this here so that we can handle multiple
-    // opens, locking, etc correctly, but that's outside of scope for now
-
+    if( path_lookup(fs, file, NULL, NULL, 0) == -1 )
+        DEBUG("cannot find the file to be closed");
+    else  
+        DEBUG("closed file %s\n", file);
+        // may need to free allocated memory here. 
 }
-
 
 static struct nk_fs_int fat32_inter = {
     .stat_path = fat32_stat_path,
@@ -452,15 +457,15 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     	INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
 
         //read
-        char* buf = (char *) malloc(1100);
-        fat32_read_write(s, "/test/hello.txt", buf, 0, 100, 0);
-        DEBUG("content of hello.txt: %s\n", buf); 
+        //char* buf = (char *) malloc(1100);
+        //fat32_read_write(s, "/test/hello.txt", buf, 0, 100, 0);
+        //DEBUG("content of hello.txt: %s\n", buf); 
         //write
        
         
-        int num;
-        path_lookup(s, "/test/files", &num, NULL, 1);
-        DEBUG("num is %d\n", num);
+        //int num;
+        //path_lookup(s, "/test/files", &num, NULL, 1);
+        //DEBUG("num is %d\n", num);
         
         char src[600];
         for(int i = 0; i < 600; i++){
@@ -468,9 +473,10 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
         }
         fat32_read_write(s, "/foo.txt", src, 599, 600, 1);
         //read
-        fat32_read_write(s, "/foo.txt", buf, 0, 1100, 0);
-        DEBUG("content of foo.txt: %s\n", buf); 
-        free(buf);
+        //fat32_read_write(s, "/foo.txt", buf, 0, 1100, 0);
+        //DEBUG("content of foo.txt: %s\n", buf); 
+        //free(buf);
+
         /*
         int num;
         path_lookup(s, "/test/hello.txt", &num);
