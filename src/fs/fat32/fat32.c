@@ -34,13 +34,15 @@
 #include "fat32_access.c"
 #include "fat32fs.h"
 
+static int fat32_exists(void *state, char *path);
+
 
 static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes, int write)
 {
 	if(srcdest == NULL) return -1; // if buffer is NULL
     struct fat32_state *fs = (struct fat32_state *) state;
     uint32_t dir_cluster_num;
-    dir_entry *dir;
+    dir_entry *dir = NULL;
     int dir_num = path_lookup(fs, (char*) file, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return -1;
 /*
@@ -226,16 +228,16 @@ static int fat32_stat_path(void *state, char *path, struct nk_fs_stat *st)
 }
 
 
-static void *fat32_create(void *state, char *path, int dir)
+static void *fat32_create(void *state, char *path, int isdir)
 {
-    /*
+    
     char *fd[2] = {"file","dir"};
-    dir &= 0x1;
+    isdir &= 0x1;
     struct fat32_state *fs = (struct fat32_state *)state;
-    DEBUG("create %s %s on fs %s\n", fd[dir], path, fs->fs->name);
+    DEBUG("create %s %s on fs %s\n", fd[isdir], path, fs->fs->name);
 
     if (fat32_exists(state, path)) {
-        return -1; // file already exists
+        return NULL; // file already exists
     }
     
     int num_parts = 0;
@@ -243,7 +245,7 @@ static void *fat32_create(void *state, char *path, int dir)
     if (!num_parts) {
         ERROR("Impossible path %s\n", path);
         free_split_path(parts,num_parts);
-        return 0;
+        return NULL;
     }
 
     char *name = parts[num_parts - 1]; // get name of file
@@ -256,19 +258,23 @@ static void *fat32_create(void *state, char *path, int dir)
     }
 
     // for path "/a/b/c/name", get dir_entry of c
-    uint32_t dir_cluster;
-    int dir_num = path_lookup(fs, path_without_name, &dir_cluster_num);
+    uint32_t dir_cluster_num;
+    dir_entry *dir = NULL;
+    int dir_num = path_lookup(fs, path_without_name, &dir_cluster_num, dir, 1);
+    DEBUG("dir_num is %d\n", dir_num);
+
     if(dir_num == -1) {
-        return -1;
+        DEBUG("directory does not exist: %s \n", path_without_name);
+        return NULL;
     }
+
     uint32_t num_dir_entry_per_file = FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry));
     dir_entry full_dirs[num_dir_entry_per_file]; // cluster containing dir_entry of c
     nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
-    DEBUG("dir_num is %d\n", dir_num);
-    dir_entry *dir = &(full_dirs[dir_num]); // dir entry of c in b
+
 
     // 
-    uint32_t * fat = state->table_chars.FAT32_begin;
+    uint32_t * fat = fs->table_chars.FAT32_begin;
     int cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     while (fat[cluster_num] != EOC_MIN) { // find the last cluster of c
         cluster_num = fat[cluster_num];
@@ -281,24 +287,53 @@ static void *fat32_create(void *state, char *path, int dir)
     }
     if (i == num_dir_entry_per_file) { // cluster is full of dir_entry ==> extend current file
         if (alloc_block(fs, cluster_num, 1) == -1) { // out of memory
-            return -1;
+            return NULL;
         }
         cluster_num = fat[cluster_num]; // advance to the allocated cluster
         i = 0; // start of cluster
         nk_block_dev_read(fs->dev, get_sector_num(cluster_num, fs), 1, full_dirs2, NK_DEV_REQ_BLOCKING); // read the new cluster of c
     }
     // fill info in dir_entry full_dirs2[i]??
-    // ...
+    
+    int new_file_cluster_num = alloc_block(fs, -1, 1); // allocate one cluster for the new file
+    if (new_file_cluster_num == -1){ // out of memory
+        return NULL;
+    }
+
+    if (isdir){
+        strncpy(full_dirs2[i].name, name, 8);
+        full_dirs2[i].attri.attris = 0;
+        full_dirs2[i].attri.each_att.dir = 1;
+    } 
+    else{
+        int ext_len, name_len;
+        char file_name[8];
+        char file_ext[3];
+        filename_parser(name, file_name, file_ext, &name_len, &ext_len);
+        strncpy(full_dirs2[i].name, file_name, name_len);
+        strncpy(full_dirs2[i].name, file_ext, ext_len);
+        full_dirs2[i].attri.attris = 0;
+        
+    }
+    full_dirs2[i].size = 0;
+    full_dirs2[i].high_cluster = EXTRACT_HIGH_CLUSTER(new_file_cluster_num);
+    full_dirs2[i].low_cluster = EXTRACT_LOW_CLUSTER(new_file_cluster_num);
+
 
     dir->size += sizeof(dir_entry); // increment size of c in (dir entry of c in b)
-    // write back to disk??
-    int rc = nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), fs->bootrecord.cluster_size, full_dirs, NK_DEV_REQ_BLOCKING);
+    int rc;
+    rc = nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), fs->bootrecord.cluster_size, full_dirs, NK_DEV_REQ_BLOCKING);
     if(rc){
-        ERROR("Failed to write on block.\n");
+        ERROR("Failed to write on block for full_dirs.\n");
     }
-    // what to return??
-    */
-    return;
+
+    rc = nk_block_dev_write(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, full_dirs2, NK_DEV_REQ_BLOCKING);
+    if(rc){
+        ERROR("Failed to write on block for full_dirs2.\n");
+    }
+
+    //return ptr to the dir_entry of the newly created file
+    return (void*) (1);
 }
 
 static void *fat32_create_file(void *state, char *path)
@@ -332,7 +367,7 @@ int fat32_remove(void *state, char *path)
     uint32_t cluster_min = fs->bootrecord.rootdir_cluster; // min valid cluster number
     uint32_t cluster_max = fs->table_chars.data_end - fs->table_chars.data_start; // max valid cluster number
     uint32_t dir_cluster_num;
-    dir_entry *dir;
+    dir_entry *dir = NULL;
     int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return -1;
     //clear FAT table entries for the file 
@@ -361,7 +396,7 @@ static void * fat32_open(void *state, char *path)
     struct fat32_state *fs = (struct fat32_state *)state;
 
     uint32_t dir_cluster_num;
-    dir_entry *dir;
+    dir_entry *dir = NULL;
     int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return NULL;
     /*
@@ -382,6 +417,7 @@ static int fat32_stat(void *state, void *file, struct nk_fs_stat *st)
 
 static int fat32_truncate(void *state, void *file, off_t len)
 {
+    /*
     struct fat32_state *fs = (struct fat32_state *)state;
     uint32_t dir_cluster_num;
     dir_entry *dir;
@@ -405,7 +441,7 @@ static int fat32_truncate(void *state, void *file, off_t len)
     dir->size = (uint32_t) new_file_size; 
     nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
 
-
+*/
     return -1;
 }
 

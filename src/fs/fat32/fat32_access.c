@@ -19,6 +19,8 @@
 #define MAX(x,y) ((x)>(y) ? (x) : (y))
 #define MIN(x,y) ((x)<(y) ? (x) : (y))
 #define DECODE_CLUSTER(h,l) ((((uint32_t)h)<<16) | ((uint32_t)l))
+#define EXTRACT_HIGH_CLUSTER(x)	((x >> 16) & 0xFFFF)
+#define EXTRACT_LOW_CLUSTER(x)	(x & 0xFFFF)
 
 static char *rw[2] = { "read", "write" };
 
@@ -308,7 +310,7 @@ int alloc_block(struct fat32_state* state, uint32_t cluster_entry, uint32_t num)
 	uint32_t count = 0;
 	for(uint32_t i = start; i < size; i++) {
 		uint32_t tmp = fat[i];
-		if( (tmp << 1) == FREE_CLUSTER ){
+		if( (tmp << 1) == FREE_CLUSTER ){ // left shift 4 bits?
 			//update FAT table
 			DEBUG("ALLOC BLOCK: i is %u\n", i);
 			if (cluster_entry_cpy == -1) { // alloc block for new file
