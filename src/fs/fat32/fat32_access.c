@@ -192,6 +192,12 @@ static char* toUpperCase(char* s) {
 
 static int path_lookup( struct fat32_state* state, char* path, uint32_t* dir_cluster_num, dir_entry* file_entry, int is_dir)
 {
+	// if look for root
+	if (path[0] == 0) {
+		DEBUG("path_lookup: path is emtpy, trying to loop up root directory");
+		*dir_cluster_num = state->bootrecord.rootdir_cluster;;
+		return 0;
+	}
 	char found = 0;
 	int num_parts;
 	char** parts = split_path(toUpperCase(path), &num_parts);

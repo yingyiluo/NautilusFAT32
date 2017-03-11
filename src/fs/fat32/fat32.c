@@ -257,25 +257,26 @@ static void *fat32_create(void *state, char *path, int isdir)
         }
     }
 
-    // for path "/a/b/c/name", get dir_entry of c
     uint32_t dir_cluster_num;
     dir_entry *dir = NULL;
+    uint32_t cluster_num;
+    uint32_t num_dir_entry_per_file = FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry));
+    dir_entry full_dirs[num_dir_entry_per_file]; // cluster containing dir_entry of c
     int dir_num = path_lookup(fs, path_without_name, &dir_cluster_num, dir, 1);
     DEBUG("dir_num is %d\n", dir_num);
 
-    if(dir_num == -1) {
-        DEBUG("directory does not exist: %s \n", path_without_name);
-        return NULL;
+    if (path_without_name[0] == 0) { // for path "/name" 
+        cluster_num = dir_cluster_num;
+    } else { // for path "/a/b/c/name", get dir_entry of c
+        if(dir_num == -1) {
+            DEBUG("directory does not exist: %s \n", path_without_name);
+            return NULL;
+        }
+        nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
+        cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     }
-
-    uint32_t num_dir_entry_per_file = FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry));
-    dir_entry full_dirs[num_dir_entry_per_file]; // cluster containing dir_entry of c
-    nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
-
-
-    // 
+    
     uint32_t * fat = fs->table_chars.FAT32_begin;
-    int cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     while (fat[cluster_num] != EOC_MIN) { // find the last cluster of c
         cluster_num = fat[cluster_num];
     }
@@ -311,7 +312,7 @@ static void *fat32_create(void *state, char *path, int isdir)
         char file_ext[3];
         filename_parser(name, file_name, file_ext, &name_len, &ext_len);
         strncpy(full_dirs2[i].name, file_name, name_len);
-        strncpy(full_dirs2[i].name, file_ext, ext_len);
+        strncpy(full_dirs2[i].ext, file_ext, ext_len);
         full_dirs2[i].attri.attris = 0;
         
     }
@@ -319,12 +320,13 @@ static void *fat32_create(void *state, char *path, int isdir)
     full_dirs2[i].high_cluster = EXTRACT_HIGH_CLUSTER(new_file_cluster_num);
     full_dirs2[i].low_cluster = EXTRACT_LOW_CLUSTER(new_file_cluster_num);
 
-
-    dir->size += sizeof(dir_entry); // increment size of c in (dir entry of c in b)
     int rc;
-    rc = nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), fs->bootrecord.cluster_size, full_dirs, NK_DEV_REQ_BLOCKING);
-    if(rc){
-        ERROR("Failed to write on block for full_dirs.\n");
+    if (path_without_name[0] != 0) { // make sure path not like "/name"
+        dir->size += sizeof(dir_entry); // increment size of c in (dir entry of c in b)
+        rc = nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), fs->bootrecord.cluster_size, full_dirs, NK_DEV_REQ_BLOCKING);
+        if(rc){
+            ERROR("Failed to write on block for full_dirs.\n");
+        }
     }
 
     rc = nk_block_dev_write(fs->dev, get_sector_num(cluster_num, fs), fs->bootrecord.cluster_size, full_dirs2, NK_DEV_REQ_BLOCKING);
@@ -528,39 +530,46 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 
     
     
-   	s->fs = nk_fs_register(fsname, flags, &fat32_inter, s);
+    s->fs = nk_fs_register(fsname, flags, &fat32_inter, s);
 
-    	if (!s->fs) { 
-		ERROR("Unable to register filesystem %s\n", fsname);
-		free(s);
-		return -1;
-    	}
+        if (!s->fs) { 
+        ERROR("Unable to register filesystem %s\n", fsname);
+        free(s);
+        return -1;
+        }
 
-    	INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
+        INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
+
+        //to test fat32_create
+        int rc = (int) fat32_create_file(s, "/newfile.txt");
+        DEBUG("file create returns %d\n", rc);
+        int num;
+        path_lookup(s, "/newfile.txt", &num, NULL, 0);
 
         //read
         //char* buf = (char *) malloc(1100);
         //fat32_read_write(s, "/test/hello.txt", buf, 0, 100, 0);
         //DEBUG("content of hello.txt: %s\n", buf); 
         //write
+
        
         
         //int num;
         //path_lookup(s, "/test/files", &num, NULL, 1);
         //DEBUG("num is %d\n", num);
         
-        char src[600];
-        for(int i = 0; i < 600; i++){
-            src[i] = 'y';
-        }
-        fat32_read_write(s, "/foo.txt", src, 599, 600, 1);
+        // char src[600];
+        // for(int i = 0; i < 600; i++){
+        //     src[i] = 'y';
+        // }
+        // fat32_read_write(s, "/foo.txt", src, 599, 600, 1);
         //read
         //fat32_read_write(s, "/foo.txt", buf, 0, 1100, 0);
         //DEBUG("content of foo.txt: %s\n", buf); 
         //free(buf);
-        fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
-        fat32_remove(s, "/foo2.txt");
-        fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
+        // fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
+        // fat32_remove(s, "/foo2.txt");
+        // fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
         /*
         int num;
         path_lookup(s, "/test/hello.txt", &num);
