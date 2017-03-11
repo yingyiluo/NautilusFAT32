@@ -146,7 +146,8 @@ static void filename_parser(char* path, char* name, char* ext, int* name_s, int*
 	//needs to handle directory(use split_path function)
 	//validate file name(eg: length)
 	//further optimization: handle long file name; handle relative path 
-	while(path[i] != '.') {
+	DEBUG("PARSER  path = %s\n", path);
+	while(path[i] != '.' && path[i]!= 0) {
 		name[i] = path[i];
 		i++;
 	}

@@ -540,11 +540,19 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 
         INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
 
-        //to test fat32_create
+        //to test fat32_create file in root director
+        /*
         int rc = (int) fat32_create_file(s, "/newfile.txt");
         DEBUG("file create returns %d\n", rc);
         int num;
         path_lookup(s, "/newfile.txt", &num, NULL, 0);
+        */
+
+        //to test fat32_create folder in root director
+        int rc = (int) fat32_create_dir(s, "/newdir");
+        DEBUG("folder create returns %d\n", rc);
+        int num;
+        path_lookup(s, "/newdir", &num, NULL, 0);
 
         //read
         //char* buf = (char *) malloc(1100);
