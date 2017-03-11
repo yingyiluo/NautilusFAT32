@@ -53,11 +53,11 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     if (!dir) { // if dir doesn't exist
         return -1;
     }*/
-    uint32_t file_size = dir->size;
+    off_t file_size = (off_t)dir->size;
     DEBUG("offset = %lu\n", offset);
     DEBUG("file_size = %u\n", file_size);
-    if (offset > (off_t)file_size) return -1; // invalid offset
-    if (offset == (off_t)file_size) return 0;
+    if (offset > file_size) return -1; // invalid offset
+    if (offset == file_size) return 0;
     off_t remainder;
     if(write){
         if(dir->attri.each_att.readonly) return -1;  //check if file is read only
@@ -382,6 +382,30 @@ static int fat32_stat(void *state, void *file, struct nk_fs_stat *st)
 
 static int fat32_truncate(void *state, void *file, off_t len)
 {
+    struct fat32_state *fs = (struct fat32_state *)state;
+    uint32_t dir_cluster_num;
+    dir_entry *dir;
+    int dir_num = path_lookup(fs, (char*) file, &dir_cluster_num, dir, 0);
+    if(dir_num == -1) return NULL;
+
+    uint32_t cluster_size = get_cluster_size(fs);
+    off_t file_size = (off_t)dir->size;
+    size_t file_size_clusters = CEIL_DIV(file_size,(off_t)cluster_size);
+    off_t new_file_size = len; 
+    size_t new_file_size_clusters = CEIL_DIV(new_file_size,(off_t)cluster_size);
+    if(new_file_size_clusters < file_size_clusters) {
+
+    }else if(new_file_size_clusters > file_size_clusters) {
+
+    }
+
+    //set new file size and write directory entry back 
+    dir_entry full_dirs[FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry))];
+    nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
+    dir->size = (uint32_t) new_file_size; 
+    nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
+
+
     return -1;
 }
 
