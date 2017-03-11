@@ -327,11 +327,33 @@ static int fat32_exists(void *state, char *path)
 int fat32_remove(void *state, char *path)
 {
     struct fat32_state *fs = (struct fat32_state *) state;
+    uint32_t * fat = fs->table_chars.FAT32_begin;
+    uint32_t fat_size = fs->table_chars.FAT32_size;
+    uint32_t cluster_min = fs->bootrecord.rootdir_cluster; // min valid cluster number
+    uint32_t cluster_max = fs->table_chars.data_end - fs->table_chars.data_start; // max valid cluster number
     uint32_t dir_cluster_num;
     dir_entry *dir;
     int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return -1;
-    return -1;
+    //clear FAT table entries for the file 
+    uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
+    do {
+        uint32_t next = fs->table_chars.FAT32_begin[cluster_num];
+        if( next < cluster_min || ( next > cluster_max && next < EOC_MIN ) ) return -1;
+        fs->table_chars.FAT32_begin[cluster_num] = FREE_CLUSTER; 
+        cluster_num = next;
+    }while(! (cluster_num >= EOC_MIN && cluster_num <= EOC_MAX) );
+    fs->table_chars.FAT32_begin[cluster_num] = FREE_CLUSTER; 
+    nk_block_dev_write(fs->dev, fs->bootrecord.reservedblock_size, fat_size, fat, NK_DEV_REQ_BLOCKING);
+    nk_block_dev_write(fs->dev, fs->bootrecord.reservedblock_size + fat_size, fat_size, fat, NK_DEV_REQ_BLOCKING);
+
+    //remove the directory entry
+    dir_entry full_dirs[FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry))];
+    nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
+    DEBUG("dir_num is %d\n", dir_num);
+    memset(full_dirs + dir_num, 0, sizeof(dir_entry));
+    nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
+    return 0;
 }
 
 static void * fat32_open(void *state, char *path)
@@ -476,7 +498,9 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
         //fat32_read_write(s, "/foo.txt", buf, 0, 1100, 0);
         //DEBUG("content of foo.txt: %s\n", buf); 
         //free(buf);
-
+        fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
+        fat32_remove(s, "/foo2.txt");
+        fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
         /*
         int num;
         path_lookup(s, "/test/hello.txt", &num);
