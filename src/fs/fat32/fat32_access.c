@@ -153,7 +153,7 @@ static void filename_parser(char* path, char* name, char* ext, int* name_s, int*
 	}
 		
 	*name_s = i;
-	if (*name_s < 8) {
+	while (*name_s < 8) {
 		name[(*name_s)++] = ' '; // append a space if name < 8 chars
 	}
 
@@ -164,7 +164,7 @@ static void filename_parser(char* path, char* name, char* ext, int* name_s, int*
 		ext_i++;
 	}
 	*ext_s = ext_i; 
-	if (*ext_s >0 && *ext_s < 3) {
+	while (*ext_s >0 && *ext_s < 3) {
 		ext[(*ext_s)++] = ' '; // append a space if ext < 3 chars
 	}
 }
