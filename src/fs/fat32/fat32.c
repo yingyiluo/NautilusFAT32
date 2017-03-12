@@ -434,7 +434,7 @@ static int fat32_truncate(void *state, void *file, off_t len)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
     uint32_t dir_cluster_num;
-    dir_entry *dir;
+    dir_entry *dir = NULL;
     int dir_num = path_lookup(fs, (char*) file, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return -1;
 
@@ -446,7 +446,7 @@ static int fat32_truncate(void *state, void *file, off_t len)
     long size_clusters_diff = new_file_size_clusters-file_size_clusters; 
     uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     uint32_t cluster_min = fs->bootrecord.rootdir_cluster; // min valid cluster number
-        uint32_t cluster_max = fs->table_chars.data_end - fs->table_chars.data_start; // max valid cluster number
+    uint32_t cluster_max = fs->table_chars.data_end - fs->table_chars.data_start; // max valid cluster number
     if(new_file_size_clusters < file_size_clusters) { //shrink
         off_t size = len;
         for(uint32_t n = 0; n < (new_file_size_clusters -1); n++) {
@@ -588,25 +588,25 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 
         //to test fat32_create file in root director
         
-        int rc = (int) fat32_create_file(s, "/folder1/newfile.txt");
+        int rc = (int) fat32_create_file(s, "/test/newfile.txt");
         DEBUG("file create returns %d\n", rc);
         int num;
-        path_lookup(s, "/folder1/newfile.txt", &num, NULL, 0);
+        path_lookup(s, "/test/newfile.txt", &num, NULL, 0);
         DEBUG("num = %d\n", num);
 
         //to test fat32_create folder in root director
-        rc = (int) fat32_create_dir(s, "/folder1/newdir");
+        rc = (int) fat32_create_dir(s, "/test/newdir");
         DEBUG("folder create returns %d\n", rc);
-        path_lookup(s, "/folder1/newdir", &num, NULL, 1);
+        path_lookup(s, "/test/newdir", &num, NULL, 1);
         DEBUG("num = %d\n", num);
 
         char* buf = (char *) malloc(400);
         for(int i = 0; i < 400; i++){
             buf[i] = 'a' + i%26;
         }
-        fat32_read_write(s, "/folder1/newfile.txt", buf, 0, 400, 1);
+        fat32_read_write(s, "/test/newfile.txt", buf, 0, 400, 1);
         memset(buf, 0, 400);
-        fat32_read_write(s, "/folder1/newfile.txt", buf, 0, 400, 0);
+        fat32_read_write(s, "/test/newfile.txt", buf, 0, 400, 0);
         DEBUG("after write: %s\n", buf);
         //read
         //char* buf = (char *) malloc(1100);
