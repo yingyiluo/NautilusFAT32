@@ -113,6 +113,7 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
             }while(src_off < num_bytes);
         } else {  //need to allocate block
             //1. fill up current block
+            DEBUG("allocate new block in write\n");
             uint32_t next = cluster_num;
             while( ! (next >= EOC_MIN && next <= EOC_MAX) ) {
                 cluster_num = next;
@@ -401,7 +402,7 @@ int fat32_remove(void *state, char *path)
     dir_entry full_dirs[FLOOR_DIV(fs->bootrecord.sector_size, sizeof(dir_entry))];
     nk_block_dev_read(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
     DEBUG("dir_num is %d\n", dir_num);
-    memset(full_dirs + dir_num, 0, sizeof(dir_entry));
+    memset(full_dirs + dir_num, '\0', sizeof(dir_entry));
     nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
     return 0;
 }
@@ -491,6 +492,7 @@ static int fat32_truncate(void *state, void *file, off_t len)
     nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
 
     return 0;
+
 }
 
 static void fat32_close(void *state, void *file)
@@ -619,19 +621,43 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
         //int num;
         //path_lookup(s, "/test/files", &num, NULL, 1);
         //DEBUG("num is %d\n", num);
+<<<<<<< HEAD
+        /*
+        char src[600];
+        for(int i = 0; i < 600; i++){
+            src[i] = 'y';
+        }
+        //fat32_read_write(s, "/test/hello.txt", src, 599, 600, 1);
+=======
         
         // char src[600];
         // for(int i = 0; i < 600; i++){
         //     src[i] = 'y';
         // }
         // fat32_read_write(s, "/foo.txt", src, 599, 600, 1);
+>>>>>>> 4261684a58279c2b077170aadfc2ecc37a9212a1
         //read
         //fat32_read_write(s, "/foo.txt", buf, 0, 1100, 0);
         //DEBUG("content of foo.txt: %s\n", buf); 
+       
+        //fat32_read_write(s, "/foo.txt", buf, 0, 1100, 0);
+        //DEBUG("content of /foo.txt: %s\n", buf);  
+        fat32_truncate(s, "/test/hello.txt", 700);
+        fat32_read_write(s, "/test/hello.txt", src, 0, 600, 1);
+        fat32_truncate(s, "/test/hello.txt", 300);
+        fat32_read_write(s, "/test/hello.txt", src, 0, 600, 1);
+        //fat32_read_write(s, "/test/hello.txt", src, 0, 600, 1);
+        */
+
+        //fat32_read_write(s, "/test/hello.txt", buf, 0, 1100, 0);
+        //DEBUG("content of /test/hello.txt: %s\n", buf); 
         //free(buf);
+<<<<<<< HEAD
+=======
         // fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
         // fat32_remove(s, "/foo2.txt");
         // fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
+>>>>>>> 4261684a58279c2b077170aadfc2ecc37a9212a1
         /*
         int num;
         path_lookup(s, "/test/hello.txt", &num);

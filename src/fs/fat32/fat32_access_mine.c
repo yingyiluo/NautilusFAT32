@@ -369,4 +369,3 @@ int alloc_block(struct fat32_state* state, uint32_t cluster_entry, long num) {
 
 	return 0; 
 }
-
