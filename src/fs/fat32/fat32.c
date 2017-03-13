@@ -216,15 +216,13 @@ static ssize_t fat32_write(void *state, void *file, void *srcdest, off_t offset,
 static int fat32_stat_path(void *state, char *path, struct nk_fs_stat *st)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
-    //uint32_t inum = get_inode_num_by_path(fs,path);
-/*
-    if (!inum) {
-        ERROR("Nonexistent path %s during stat\n",path);
-        return -1;
-    }
-*/
-   // return ext2_stat(state,(void*)(uint64_t)inum,st);
-   return -1;
+    dir_entry *dir = NULL;
+    int dir_num = path_lookup(fs, (char*) path, NULL, dir, 0);
+    if(dir_num == -1) return -1;
+
+    st->st_size = dir->size;
+
+    return 0;
 }
 
 
@@ -426,8 +424,8 @@ static void * fat32_open(void *state, char *path)
 
 static int fat32_stat(void *state, void *file, struct nk_fs_stat *st)
 {
-    struct fat32_state *fs = (struct fat32_state *)state;
-    return 0;
+    
+    return fat32_stat_path(state, file, st);
 }
 
 static int fat32_truncate(void *state, void *file, off_t len)
