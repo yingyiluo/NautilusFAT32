@@ -42,7 +42,7 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
 	if(srcdest == NULL) return -1; // if buffer is NULL
     struct fat32_state *fs = (struct fat32_state *) state;
     uint32_t dir_cluster_num;
-    dir_entry *dir = NULL;
+    dir_entry *dir = malloc(sizeof(dir_entry));
     int dir_num = path_lookup(fs, (char*) file, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return -1;
 /*
@@ -58,11 +58,22 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     off_t file_size = (off_t)dir->size;
     DEBUG("offset = %lu\n", offset);
     DEBUG("file_size = %u\n", file_size);
-    if (offset > file_size) return -1; // invalid offset
-    if (offset == file_size && write == 0) return 0; // 0??
+    if (offset > file_size) {
+        free(dir);
+        return -1; // invalid offset
+    }
+
+    if (offset == file_size && write == 0){
+        free(dir);
+        return 0; // 0??
+    }
+
     off_t remainder;
     if(write){
-        if(dir->attri.each_att.readonly) return -1;  //check if file is read only
+        if(dir->attri.each_att.readonly) {
+            free(dir);
+            return -1;
+            }  //check if file is read only
     }/*
     else{ 
         remainder = offset;
@@ -78,8 +89,14 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
     {
         uint32_t next = fs->table_chars.FAT32_begin[cluster_num];
         //check if next is valid
-        if( next >= EOC_MIN && next <= EOC_MAX ) return -1;
-        if( next < cluster_min || next > cluster_max ) return -1;
+        if( next >= EOC_MIN && next <= EOC_MAX ) {
+            free(dir);
+            return -1;
+        }
+        if( next < cluster_min || next > cluster_max ) {
+            free(dir);
+            return -1;
+        }
         cluster_num = next; 
         remainder -= cluster_size;
     }
@@ -129,13 +146,19 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
                 src_off += MIN(cluster_size - remainder, num_bytes-src_off); 
                 remainder = 0;
                 next = fs->table_chars.FAT32_begin[cluster_num];
-                if( next < cluster_min || ( next > cluster_max && next < EOC_MIN ) ) return -1;
+                if( next < cluster_min || ( next > cluster_max && next < EOC_MIN ) ) {
+                    free(dir);
+                    return -1;
+                }
             }
             //2. if it still has sth to write, allocate new block
             uint32_t num_allocate = CEIL_DIV(num_bytes - src_off, cluster_size);
             DEBUG("num_allocate is %u\n", num_allocate);
             if( num_allocate > 0){
-                if( alloc_block(fs, cluster_num, num_allocate) == -1 ) return -1;
+                if( alloc_block(fs, cluster_num, num_allocate) == -1 ) {
+                    free(dir);
+                    return -1;
+                }
                 cluster_num = fs->table_chars.FAT32_begin[cluster_num];
                 DEBUG("cluster number after allocation is %u\n", cluster_num);
                 do{
@@ -200,7 +223,7 @@ static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t of
         //DEBUG("FILE IS %s\n", srcdest+1024);
         //memset(srcdest + dest_off, 0, num_bytes - dest_off);
     }
-    
+
 }
 
 static ssize_t fat32_read(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes)
@@ -216,8 +239,9 @@ static ssize_t fat32_write(void *state, void *file, void *srcdest, off_t offset,
 static int fat32_stat_path(void *state, char *path, struct nk_fs_stat *st)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
-    dir_entry *dir = NULL;
-    int dir_num = path_lookup(fs, (char*) path, NULL, dir, 0);
+    dir_entry dir;
+    int num;
+    int dir_num = path_lookup(fs, (char*) path, &num, &dir, 0);
     if(dir_num == -1) return -1;
 
     st->st_size = dir->size;
@@ -367,9 +391,12 @@ static int fat32_create_dir(void *state, char *path)
 
 static int fat32_exists(void *state, char *path)
 {
+    dir_entry* dir_entry_ptr = malloc(sizeof(dir_entry));
     struct fat32_state *fs = (struct fat32_state *)state;
     //uint32_t dir_cluster;
-    return path_lookup(fs, path, NULL, NULL, 0) != -1;
+    int rc = path_lookup(fs, path, NULL, dir_entry_ptr, 0) != -1;
+    free(dir_entry_ptr);
+    return rc;
 }
 
 int fat32_remove(void *state, char *path)
@@ -380,14 +407,20 @@ int fat32_remove(void *state, char *path)
     uint32_t cluster_min = fs->bootrecord.rootdir_cluster; // min valid cluster number
     uint32_t cluster_max = fs->table_chars.data_end - fs->table_chars.data_start; // max valid cluster number
     uint32_t dir_cluster_num;
-    dir_entry *dir = NULL;
+    dir_entry *dir = malloc(sizeof(dir_entry));
     int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num, dir, 0);
-    if(dir_num == -1) return -1;
+    if(dir_num == -1) {
+        free(dir);
+        return -1;
+    }
     //clear FAT table entries for the file 
     uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     do {
         uint32_t next = fs->table_chars.FAT32_begin[cluster_num];
-        if( next < cluster_min || ( next > cluster_max && next < EOC_MIN ) ) return -1;
+        if( next < cluster_min || ( next > cluster_max && next < EOC_MIN ) ) {
+            free(dir);
+            return -1;
+        }
         fs->table_chars.FAT32_begin[cluster_num] = FREE_CLUSTER; 
         cluster_num = next;
     }while(! (cluster_num >= EOC_MIN && cluster_num <= EOC_MAX) );
@@ -409,7 +442,7 @@ static void * fat32_open(void *state, char *path)
     struct fat32_state *fs = (struct fat32_state *)state;
 
     uint32_t dir_cluster_num;
-    dir_entry *dir = NULL;
+    dir_entry *dir = malloc(sizeof(dir_entry));
     int dir_num = path_lookup(fs, (char*) path, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return NULL;
     /*
@@ -419,12 +452,12 @@ static void * fat32_open(void *state, char *path)
     */
     //uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     //DEBUG("open of %s returned cluster number %u\n", path, cluster_num);
+    free(dir);
     return (void*)path;
 }
 
 static int fat32_stat(void *state, void *file, struct nk_fs_stat *st)
 {
-    
     return fat32_stat_path(state, file, st);
 }
 
@@ -432,7 +465,7 @@ static int fat32_truncate(void *state, void *file, off_t len)
 {
     struct fat32_state *fs = (struct fat32_state *)state;
     uint32_t dir_cluster_num;
-    dir_entry *dir = NULL;
+    dir_entry *dir = malloc(sizeof(dir_entry));
     int dir_num = path_lookup(fs, (char*) file, &dir_cluster_num, dir, 0);
     if(dir_num == -1) return -1;
 
@@ -444,7 +477,7 @@ static int fat32_truncate(void *state, void *file, off_t len)
     long size_clusters_diff = new_file_size_clusters-file_size_clusters; 
     uint32_t cluster_num = DECODE_CLUSTER(dir->high_cluster, dir->low_cluster);
     uint32_t cluster_min = fs->bootrecord.rootdir_cluster; // min valid cluster number
-    uint32_t cluster_max = fs->table_chars.data_end - fs->table_chars.data_start; // max valid cluster number
+        uint32_t cluster_max = fs->table_chars.data_end - fs->table_chars.data_start; // max valid cluster number
     if(new_file_size_clusters < file_size_clusters) { //shrink
         off_t size = len;
         for(uint32_t n = 0; n < (new_file_size_clusters -1); n++) {
@@ -488,17 +521,20 @@ static int fat32_truncate(void *state, void *file, off_t len)
     full_dirs[dir_num].size = (uint32_t) new_file_size; 
     nk_block_dev_write(fs->dev, get_sector_num(dir_cluster_num, fs), 1, full_dirs, NK_DEV_REQ_BLOCKING);
 
+    free(dir);
     return 0;
 }
 
 static void fat32_close(void *state, void *file)
 {
+    dir_entry * dir = malloc(sizeof(dir_entry));
     struct fat32_state *fs = (struct fat32_state *)state;
-    if( path_lookup(fs, file, NULL, NULL, 0) == -1 )
+    if( path_lookup(fs, file, NULL, dir, 0) == -1 )
         DEBUG("cannot find the file to be closed");
     else  
         DEBUG("closed file %s\n", file);
         // may need to free allocated memory here. 
+    free(dir);
 }
 
 static struct nk_fs_int fat32_inter = {
@@ -586,26 +622,36 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
 
         //to test fat32_create file in root director
         
-        int rc = (int) fat32_create_file(s, "/test/newfile.txt");
+        int rc = (int) fat32_create_file(s, "/folder1/newfile.txt");
+        
         DEBUG("file create returns %d\n", rc);
         int num;
-        path_lookup(s, "/test/newfile.txt", &num, NULL, 0);
+        void* dir_entry_ptr = malloc(32);
+
+        path_lookup(s, "/folder1/newfile.txt", &num, dir_entry_ptr, 0);
+
         DEBUG("num = %d\n", num);
 
         //to test fat32_create folder in root director
-        rc = (int) fat32_create_dir(s, "/test/newdir");
+        rc = (int) fat32_create_dir(s, "/folder1/newdir");
         DEBUG("folder create returns %d\n", rc);
-        path_lookup(s, "/test/newdir", &num, NULL, 1);
+        path_lookup(s, "/folder1/newdir", &num, dir_entry_ptr, 1);
+        free(dir_entry_ptr);
+
         DEBUG("num = %d\n", num);
 
         char* buf = (char *) malloc(400);
         for(int i = 0; i < 400; i++){
             buf[i] = 'a' + i%26;
         }
-        fat32_read_write(s, "/test/newfile.txt", buf, 0, 400, 1);
+
+        fat32_read_write(s, "/folder1/newfile.txt", buf, 0, 400, 1);
         memset(buf, 0, 400);
-        fat32_read_write(s, "/test/newfile.txt", buf, 0, 400, 0);
+        /*
+        fat32_read_write(s, "/folder1/newfile.txt", buf, 0, 400, 0);
         DEBUG("after write: %s\n", buf);
+        */
+
         //read
         //char* buf = (char *) malloc(1100);
         //fat32_read_write(s, "/test/hello.txt", buf, 0, 100, 0);
