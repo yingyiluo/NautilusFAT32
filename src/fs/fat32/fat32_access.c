@@ -370,3 +370,20 @@ int alloc_block(struct fat32_state* state, uint32_t cluster_entry, long num) {
 	return 0; 
 }
 
+
+#define BYTES_PER_LINE 16
+void mem_print(char *addr, int len){
+	int i, j, k;
+	int size = 1;
+	for (i=0;i<len;i+=BYTES_PER_LINE) {
+	  nk_vc_printf("%016lx :",addr+i);
+	  nk_vc_printf(" ");
+	  for (j=0;j<BYTES_PER_LINE && (i+j)<len; j+=size) {
+	      for (k=0;k<size;k++) { 
+		  nk_vc_printf("%c", isalnum(*(uint8_t*)(addr+i+j+k)) ? 
+			       *(uint8_t*)(addr+i+j+k) : '.');
+	      }
+	  }
+	  nk_vc_printf("\n");
+	}
+}
