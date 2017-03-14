@@ -39,7 +39,7 @@ static int fat32_exists(void *state, char *path);
 
 static ssize_t fat32_read_write(void *state, void *file, void *srcdest, off_t offset, size_t num_bytes, int write)
 {
-	if(srcdest == NULL) return -1; // if buffer is NULL
+    if(srcdest == NULL) return -1; // if buffer is NULL
     struct fat32_state *fs = (struct fat32_state *) state;
     uint32_t dir_cluster_num;
     dir_entry *dir = malloc(sizeof(dir_entry));
@@ -244,7 +244,7 @@ static int fat32_stat_path(void *state, char *path, struct nk_fs_stat *st)
     int dir_num = path_lookup(fs, (char*) path, &num, &dir, 0);
     if(dir_num == -1) return -1;
 
-    st->st_size = dir->size;
+    st->st_size = dir.size;
 
     return 0;
 }
@@ -552,18 +552,18 @@ static struct nk_fs_int fat32_inter = {
 };
 
 int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
-	struct nk_block_dev *dev = nk_block_dev_find(devname);
-	uint64_t flags = readonly ? NK_FS_READONLY : 0;
+    struct nk_block_dev *dev = nk_block_dev_find(devname);
+    uint64_t flags = readonly ? NK_FS_READONLY : 0;
 
-	if (!dev) { 
-		ERROR("Cannot find device %s\n",devname);
-		return -1;
+    if (!dev) { 
+        ERROR("Cannot find device %s\n",devname);
+        return -1;
     }
 
     struct fat32_state *s = malloc(sizeof(*s));
     if (!s) { 
-		ERROR("Cannot allocate space for fs %s\n", fsname);
-		return -1;
+        ERROR("Cannot allocate space for fs %s\n", fsname);
+        return -1;
     }
 
     memset(s,0,sizeof(*s));
@@ -571,18 +571,18 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     s->dev = dev;
     
     if (nk_block_dev_get_characteristics(dev,&s->chars)) { 
-		ERROR("Cannot get characteristics of device %s\n", devname);
-		free(s);
-		return -1;
+        ERROR("Cannot get characteristics of device %s\n", devname);
+        free(s);
+        return -1;
     }
 
     DEBUG("Device %s has block size %lu and numblocks %lu\n",dev->dev.name, s->chars.block_size, s->chars.num_blocks);
     
     //read reserved block(boot record)
     if (read_bootrecord(s)) {
-		ERROR("Cannot read bootrecord for fs FAT32 %s on device %s\n", fsname, devname);
-		free(s);
-		return -1;
+        ERROR("Cannot read bootrecord for fs FAT32 %s on device %s\n", fsname, devname);
+        free(s);
+        return -1;
     }
 
     if (read_FAT(s)){
@@ -594,95 +594,50 @@ int nk_fs_fat32_attach(char *devname, char *fsname, int readonly){
     
     
     //DEBUG("System ID \"%s\"\n", s->bootrecord.system_id);
-	DEBUG("Media byte %x\n", s->bootrecord.media_type);
-	DEBUG("%lu bytes per logical sector\n",s->bootrecord.sector_size);
-	DEBUG("%lu bytes per cluster\n",s->bootrecord.cluster_size * BLOCK_SIZE);
-	DEBUG("%lu reserved sectors\n",s->bootrecord.reservedblock_size);
-	DEBUG("First FAT starts at sector %lu\n",s->bootrecord.reservedblock_size);
-	DEBUG("%lu FATs\n",s->bootrecord.FAT_num);
-	DEBUG("%lu sectors per FAT\n",s->bootrecord.FAT32_size);
-	DEBUG("Root directory start at cluster %lu (arbitrary size)\n",s->bootrecord.rootdir_cluster);
-	//DEBUG("Data area starts at byte 1049600 (sector 2050)\n",);
-	//DEBUG("129022 data clusters (66059264 bytes)\n",);
-	DEBUG("%lu sectors/track, %lu heads\n",s->bootrecord.track_size, s->bootrecord.head_num);
-	DEBUG("%lu hidden sectors\n",s->bootrecord.hidden_sector_num);
-	DEBUG("%lu sectors total\n",s->bootrecord.total_sector_num);
+    DEBUG("Media byte %x\n", s->bootrecord.media_type);
+    DEBUG("%lu bytes per logical sector\n",s->bootrecord.sector_size);
+    DEBUG("%lu bytes per cluster\n",s->bootrecord.cluster_size * BLOCK_SIZE);
+    DEBUG("%lu reserved sectors\n",s->bootrecord.reservedblock_size);
+    DEBUG("First FAT starts at sector %lu\n",s->bootrecord.reservedblock_size);
+    DEBUG("%lu FATs\n",s->bootrecord.FAT_num);
+    DEBUG("%lu sectors per FAT\n",s->bootrecord.FAT32_size);
+    DEBUG("Root directory start at cluster %lu (arbitrary size)\n",s->bootrecord.rootdir_cluster);
+    //DEBUG("Data area starts at byte 1049600 (sector 2050)\n",);
+    //DEBUG("129022 data clusters (66059264 bytes)\n",);
+    DEBUG("%lu sectors/track, %lu heads\n",s->bootrecord.track_size, s->bootrecord.head_num);
+    DEBUG("%lu hidden sectors\n",s->bootrecord.hidden_sector_num);
+    DEBUG("%lu sectors total\n",s->bootrecord.total_sector_num);
 
     
     
     s->fs = nk_fs_register(fsname, flags, &fat32_inter, s);
 
-        if (!s->fs) { 
-        ERROR("Unable to register filesystem %s\n", fsname);
-        free(s);
-        return -1;
-        }
+    if (!s->fs) { 
+    ERROR("Unable to register filesystem %s\n", fsname);
+    free(s);
+    return -1;
+    }
 
-        INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
+    INFO("filesystem %s on device %s is attached (%s)\n", fsname, devname, readonly ?  "readonly" : "read/write");
+    
+    /* Tests for demo */
+    // create a new dir and a new file under it
+    fat32_create_dir(s, "/live");
+    fat32_create_file(s, "/live/foo.txt");
 
-        //to test fat32_create file in root director
-        
-        int rc = (int) fat32_create_file(s, "/folder1/newfile.txt");
-        
-        DEBUG("file create returns %d\n", rc);
-        int num;
-        void* dir_entry_ptr = malloc(32);
+    // write into file just created
+    fat32_write(s, "/live/foo.txt", "Hello world!\n", 0, 13);
+    char src[600];
+    for(int i = 0; i < 600; i++){ src[i] = 'o'; }
+    src[598] = '!';
+    src[599] = '\n';
+    fat32_write(s, "/bar.txt", src, 2, 600);
 
-        path_lookup(s, "/folder1/newfile.txt", &num, dir_entry_ptr, 0);
+    // truncate and remove
+    // fat32_truncate(s, "/bar.txt", 3);
+    // fat32_remove(s, "/live/foo.txt");
 
-        DEBUG("num = %d\n", num);
-
-        //to test fat32_create folder in root director
-        rc = (int) fat32_create_dir(s, "/folder1/newdir");
-        DEBUG("folder create returns %d\n", rc);
-        path_lookup(s, "/folder1/newdir", &num, dir_entry_ptr, 1);
-        free(dir_entry_ptr);
-
-        DEBUG("num = %d\n", num);
-
-        char* buf = (char *) malloc(400);
-        for(int i = 0; i < 400; i++){
-            buf[i] = 'a' + i%26;
-        }
-
-        fat32_read_write(s, "/folder1/newfile.txt", buf, 0, 400, 1);
-        memset(buf, 0, 400);
-        /*
-        fat32_read_write(s, "/folder1/newfile.txt", buf, 0, 400, 0);
-        DEBUG("after write: %s\n", buf);
-        */
-
-        //read
-        //char* buf = (char *) malloc(1100);
-        //fat32_read_write(s, "/test/hello.txt", buf, 0, 100, 0);
-        //DEBUG("content of hello.txt: %s\n", buf); 
-        //write
-
-       
-        
-        //int num;
-        //path_lookup(s, "/test/files", &num, NULL, 1);
-        //DEBUG("num is %d\n", num);
-        
-        // char src[600];
-        // for(int i = 0; i < 600; i++){
-        //     src[i] = 'y';
-        // }
-        // fat32_read_write(s, "/foo.txt", src, 599, 600, 1);
-        //read
-        //fat32_read_write(s, "/foo.txt", buf, 0, 1100, 0);
-        //DEBUG("content of foo.txt: %s\n", buf); 
-        //free(buf);
-        // fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
-        // fat32_remove(s, "/foo2.txt");
-        // fat32_read_write(s, "/foo.txt", src, 0, 10, 0);
-        /*
-        int num;
-        path_lookup(s, "/test/hello.txt", &num);
-        */
-        
-        
-	return 0;
+    return 0;
 }
 
 int nk_fs_ext2_detach(char *fsname)
